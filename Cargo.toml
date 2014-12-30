@@ -1,0 +1,5 @@
+[package]
+
+name = "rdb"
+version = "0.0.1"
+authors = ["Jan-Erik Rediger <badboy@archlinux.us>"]
