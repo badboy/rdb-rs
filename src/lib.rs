@@ -1,3 +1,4 @@
+#![feature(slicing_syntax)]
 extern crate lzf;
 use std::str;
 use lzf::decompress;
@@ -48,7 +49,7 @@ pub enum DataType {
     String(Vec<u8>),
     List(Vec<Vec<u8>>),
     Set(Vec<Vec<u8>>),
-    SortedSet(Vec<(f32,Vec<u8>)>),
+    SortedSet(Vec<(f64,Vec<u8>)>),
     Hash(Vec<Vec<u8>>),
     Unknown
 }
@@ -105,40 +106,69 @@ pub fn parse<T: Reader>(input: &mut T) {
 
 }
 
+fn read_linked_list<T: Reader>(input: &mut T) -> Vec<Vec<u8>> {
+    let mut len = read_length(input);
+    let mut list = vec![];
+
+    while len > 0 {
+        let blob = read_blob(input);
+        list.push(blob);
+        len -= 1;
+    }
+
+    list
+}
+
+fn read_sorted_set<T: Reader>(input: &mut T) -> Vec<(f64,Vec<u8>)> {
+    let mut set = vec![];
+    let mut set_items = read_length(input);
+
+    while set_items > 0 {
+        let val = read_blob(input);
+        let score_length = input.read_byte().unwrap();
+        let score = input.read_exact(score_length as uint).unwrap();
+        let score = unsafe{str::from_utf8_unchecked(score[])}.
+            parse::<f64>().unwrap();
+
+        set.push((score, val));
+
+        set_items -= 1;
+    }
+
+    set
+}
+
+fn read_hash<T: Reader>(input: &mut T) -> Vec<Vec<u8>> {
+    let mut hash = vec![];
+    let mut hash_items = read_length(input);
+    hash_items = 2*hash_items;
+
+    while hash_items > 0 {
+        let val = read_blob(input);
+        hash.push(val);
+
+        hash_items -= 1;
+    }
+
+    hash
+}
+
 fn read_type<T: Reader>(value_type: u8, input: &mut T) -> DataType {
     match value_type {
         types::STRING => {
             DataType::String(read_blob(input))
         },
         types::LIST => {
-            //DataType::List(read_linked_list(input))
-
-            let mut len = read_length(input);
-            let mut list = vec![];
-
-            while len > 0 {
-                let blob = read_blob(input);
-                list.push(blob);
-                len -= 1;
-            }
-
-            DataType::List(list)
+            DataType::List(read_linked_list(input))
         },
         types::SET => {
-            println!("Value Type not implemented: {}", "SET");
-
-            //DataType::Set(read_set(input))
-            DataType::Set(vec![])
+            DataType::Set(read_linked_list(input))
         },
         types::ZSET => {
-            println!("Value Type not implemented: {}", "ZSET");
-            //DataType::SortedSet(read_sorted_set(input))
-            DataType::SortedSet(vec![])
+            DataType::SortedSet(read_sorted_set(input))
         },
         types::HASH => {
-            println!("Value Type not implemented: {}", "HASH");
-            //DataType::Hash(read_hash(input))
-            DataType::Hash(vec![])
+            DataType::Hash(read_hash(input))
         },
         types::HASH_ZIPMAP => {
             println!("Value Type not implemented: {}", "HASH_ZIPMAP");
