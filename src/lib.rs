@@ -2,6 +2,7 @@
 extern crate lzf;
 use std::str;
 use lzf::decompress;
+use std::io::MemReader;
 
 mod version {
     pub const SUPPORTED_MINIMUM : u32 = 1;
@@ -47,6 +48,11 @@ mod encoding {
 #[deriving(Show)]
 pub enum DataType {
     String(Vec<u8>),
+    Number(i64),
+    ListOfTypes(Vec<DataType>),
+    HashOfTypes(Vec<DataType>),
+    SortedSetOfTypes(Vec<DataType>),
+    Intset(Vec<i64>),
     List(Vec<Vec<u8>>),
     Set(Vec<Vec<u8>>),
     SortedSet(Vec<(f64,Vec<u8>)>),
@@ -96,7 +102,6 @@ pub fn parse<T: Reader>(input: &mut T) {
                 println!("Key: {}",
                          str::from_utf8(key.as_slice()).unwrap());
                 println!("Val: {}", read_type(next_op, input));
-                break;
             }
         }
 
@@ -153,6 +158,104 @@ fn read_hash<T: Reader>(input: &mut T) -> Vec<Vec<u8>> {
     hash
 }
 
+fn read_list_ziplist<T: Reader>(input: &mut T) -> Vec<DataType> {
+    let mut list = vec![];
+
+    let ziplist = read_blob(input);
+
+    let mut reader = MemReader::new(ziplist);
+
+    let zlbytes = reader.read_le_u32().unwrap();
+    let _zltail = reader.read_le_u32().unwrap();
+    let zllen = reader.read_le_u16().unwrap();
+
+    for _ in range(0, zllen) {
+        // 1. 1 or 5 bytes length of previous entry
+        match reader.read_byte().unwrap() {
+            254 => {
+                let _ = reader.read_exact(4).unwrap();
+            },
+            _ => {}
+        }
+
+        let mut length : u64;
+        let mut number_value : i64;
+
+        // 2. Read flag or number value
+        let flag = reader.read_byte().unwrap();
+
+        match (flag & 0xC0) >> 6 {
+            0 => { length = (flag & 0x3F) as u64 },
+            1 => {
+                let next_byte = reader.read_byte().unwrap();
+                length = ((flag & 0x3F) as u64 <<8) | next_byte as u64;
+            },
+            2 => {
+                length = input.read_le_u32().unwrap() as u64;
+            },
+            _ => {
+                match (flag & 0xF0) >> 4 {
+                    0xC => {
+                        number_value = reader.read_le_i16().unwrap() as i64 },
+                    0xD => {
+                        number_value = reader.read_le_i32().unwrap() as i64 },
+                    0xE => {
+                        number_value = reader.read_le_i64().unwrap() as i64 },
+                    0xF => {
+                        match flag & 0xF {
+                            0 => {
+                                let bytes = reader.read_exact(3).unwrap();
+                                number_value = (bytes[0] as i64 << 16) ^
+                                    (bytes[1] as i64 << 8) ^
+                                    (bytes[2] as i64);
+                            },
+                            0xE => {
+                                number_value = reader.read_byte().unwrap() as i64 },
+                            _ => { number_value = (flag & 0xF) as i64 - 1; }
+                        }
+                    },
+                    _ => {
+                        println!("Flag not handled: {}", flag);
+                        continue;
+                    }
+
+                }
+
+                list.push(DataType::Number(number_value));
+                continue;
+            }
+        }
+
+        // 3. Read value
+        let rawval = reader.read_exact(length as uint).unwrap();
+        list.push(DataType::String(rawval));
+    }
+
+    list
+}
+fn read_set_intset<T: Reader>(input: &mut T) -> Vec<i64> {
+    let mut set = vec![];
+
+    let intset = read_blob(input);
+
+    let mut reader = MemReader::new(intset);
+    let byte_size = reader.read_le_u32().unwrap();
+    let intset_length = reader.read_le_u32().unwrap();
+
+    for _ in range(0, intset_length) {
+        let val = match byte_size {
+            2 => reader.read_le_i16().unwrap() as i64,
+            4 => reader.read_le_i32().unwrap() as i64,
+            8 => reader.read_le_i64().unwrap(),
+            _ => panic!("unhandled byte size in intset: {}", byte_size)
+        };
+
+        set.push(val);
+    }
+
+    set
+}
+
 fn read_type<T: Reader>(value_type: u8, input: &mut T) -> DataType {
     match value_type {
         types::STRING => {
@@ -176,24 +279,16 @@ fn read_type<T: Reader>(value_type: u8, input: &mut T) -> DataType {
             DataType::Hash(vec![])
         },
         types::LIST_ZIPLIST => {
-            println!("Value Type not implemented: {}", "LIST_ZIPLIST");
-            //DataType::List(read_list_ziplist(input))
-            DataType::List(vec![])
+            DataType::ListOfTypes(read_list_ziplist(input))
         },
         types::SET_INTSET => {
-            println!("Value Type not implemented: {}", "SET_INTSET");
-            //DataType::Set(read_set_intset(input))
-            DataType::Set(vec![])
+            DataType::Intset(read_set_intset(input))
         },
         types::ZSET_ZIPLIST => {
-            println!("Value Type not implemented: {}", "ZSET_ZIPLIST");
-            //DataType::SortedSet(read_zset_ziplist(input))
-            DataType::SortedSet(vec![])
+            DataType::SortedSetOfTypes(read_list_ziplist(input))
         },
         types::HASH_ZIPLIST => {
-            println!("Value Type not implemented: {}", "HASH_ZIPLIST");
-            //DataType::Hash(read_hash_ziplist(input))
-            DataType::Hash(vec![])
+            DataType::ListOfTypes(read_list_ziplist(input))
         },
         _ => { panic!("Value Type not implemented: {}", value_type) }
     }
@@ -224,8 +319,6 @@ fn verify_version<T: Reader>(input: &mut T) -> bool {
 
 #[test]
 fn test_verify_magic() {
-    use std::io::MemReader;
-
     assert_eq!(
         true,
         verify_magic(&mut MemReader::new(vec!(0x52, 0x45, 0x44, 0x49, 0x53)))
@@ -239,8 +332,6 @@ fn test_verify_magic() {
 
 #[test]
 fn test_verify_version() {
-    use std::io::MemReader;
-
     assert_eq!(
         true,
         verify_version(&mut MemReader::new(vec!(0x30, 0x30, 0x30, 0x33)))
@@ -314,8 +405,6 @@ fn read_blob<T: Reader>(input: &mut T) -> Vec<u8> {
 
 #[test]
 fn test_read_length() {
-    use std::io::MemReader;
-
     assert_eq!(
         LengthEncoded::LE(0, false),
         read_length_with_encoding(&mut MemReader::new(vec!(0x0)))
@@ -341,8 +430,6 @@ fn test_read_length() {
 
 #[test]
 fn test_read_blob() {
-    use std::io::MemReader;
-
     assert_eq!(
         vec!(0x61, 0x62, 0x63, 0x64),
         read_blob(&mut MemReader::new(vec!(
