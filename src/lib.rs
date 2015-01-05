@@ -15,7 +15,6 @@ mod constants {
     pub const RDB_14BITLEN : u8 = 1;
     pub const RDB_32BITLEN : u8 = 2;
     pub const RDB_ENCVAL : u8 = 3;
-    // REDIS
     pub const RDB_MAGIC : &'static str = "REDIS";
 }
 
