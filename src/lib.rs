@@ -45,7 +45,7 @@ mod encoding {
     pub const LZF : u32 = 3;
 }
 
-#[deriving(Show)]
+#[derive(Show)]
 pub enum DataType {
     String(Vec<u8>),
     Number(i64),
@@ -165,7 +165,7 @@ fn read_list_ziplist<T: Reader>(input: &mut T) -> Vec<DataType> {
 
     let mut reader = MemReader::new(ziplist);
 
-    let zlbytes = reader.read_le_u32().unwrap();
+    let _zlbytes = reader.read_le_u32().unwrap();
     let _zltail = reader.read_le_u32().unwrap();
     let zllen = reader.read_le_u16().unwrap();
 
@@ -188,7 +188,7 @@ fn read_list_ziplist<T: Reader>(input: &mut T) -> Vec<DataType> {
             0 => { length = (flag & 0x3F) as u64 },
             1 => {
                 let next_byte = reader.read_byte().unwrap();
-                length = ((flag & 0x3F) as u64 <<8) | next_byte as u64;
+                length = (((flag & 0x3F) as u64) << 8) | next_byte as u64;
             },
             2 => {
                 length = input.read_le_u32().unwrap() as u64;
@@ -205,8 +205,8 @@ fn read_list_ziplist<T: Reader>(input: &mut T) -> Vec<DataType> {
                         match flag & 0xF {
                             0 => {
                                 let bytes = reader.read_exact(3).unwrap();
-                                number_value = (bytes[0] as i64 << 16) ^
-                                    (bytes[1] as i64 << 8) ^
+                                number_value = ((bytes[0] as i64) << 16) ^
+                                    ((bytes[1] as i64) << 8) ^
                                     (bytes[2] as i64);
                             },
                             0xE => {
@@ -343,7 +343,7 @@ fn test_verify_version() {
     );
 }
 
-#[deriving(Show,PartialEq)]
+#[derive(Show,PartialEq)]
 enum LengthEncoded {
     LE(u32, bool)
     //Encoded(u32),
@@ -366,7 +366,7 @@ fn read_length_with_encoding<T: Reader>(input: &mut T) -> LengthEncoded {
         },
         constants::RDB_14BITLEN => {
             let next_byte = input.read_byte().unwrap();
-            length = ((enc_type & 0x3F) as u32 <<8) | next_byte as u32;
+            length = (((enc_type & 0x3F) as u32) <<8) | next_byte as u32;
         },
         _ => {
             println!("foo");
