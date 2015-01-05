@@ -3,6 +3,7 @@ extern crate lzf;
 use std::str;
 use lzf::decompress;
 use std::io::MemReader;
+use std::io;
 
 mod version {
     pub const SUPPORTED_MINIMUM : u32 = 1;
@@ -76,6 +77,7 @@ pub fn parse<T: Reader>(input: &mut T) {
     assert!(verify_magic(input));
     assert!(verify_version(input));
 
+    let mut out = io::stdout();
     loop {
         let next_op = input.read_byte().unwrap();
         //println!("next_op: {:x}", next_op);
@@ -99,9 +101,16 @@ pub fn parse<T: Reader>(input: &mut T) {
             }
             _ => {
                 let key = read_blob(input);
-                println!("Key: {}",
-                         str::from_utf8(key.as_slice()).unwrap());
-                println!("Val: {}", read_type(next_op, input));
+                let _ = out.write(key[]);
+                let _ = out.write_str(": ");
+
+                match read_type(next_op, input) {
+                    DataType::String(t) => {
+                        let _ = out.write(t[]);
+                    },
+                    _ => {  }
+                }
+                let _ = out.write_str("\n");
             }
         }
 
@@ -369,7 +378,6 @@ fn read_length_with_encoding<T: Reader>(input: &mut T) -> LengthEncoded {
             length = (((enc_type & 0x3F) as u32) <<8) | next_byte as u32;
         },
         _ => {
-            println!("foo");
             length = input.read_le_u32().unwrap();
         }
     }
@@ -382,14 +390,23 @@ fn read_length<T: Reader>(input: &mut T) -> u32 {
     length
 }
 
+fn int_to_vec(number: i32) -> Vec<u8> {
+    let number = number.to_string();
+    let mut result = Vec::with_capacity(number.len());
+    for &c in number.as_bytes().iter() {
+        result.push(c);
+    }
+    result
+}
+
 fn read_blob<T: Reader>(input: &mut T) -> Vec<u8> {
     let LengthEncoded::LE(length, is_encoded) = read_length_with_encoding(input);
 
     if is_encoded {
         match length {
-            encoding::INT8 => { input.read_exact(1).unwrap() },
-            encoding::INT16 => { input.read_exact(2).unwrap() },
-            encoding::INT32 => { input.read_exact(4).unwrap() },
+            encoding::INT8 => { int_to_vec(input.read_i8().unwrap() as i32) },
+            encoding::INT16 => { int_to_vec(input.read_le_i16().unwrap() as i32) },
+            encoding::INT32 => { int_to_vec(input.read_le_i32().unwrap() as i32) },
             encoding::LZF => {
                 let compressed_length = read_length(input);
                 let real_length = read_length(input);
