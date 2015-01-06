@@ -65,62 +65,72 @@ pub enum LengthEncoded {
     LE(u32, bool)
 }
 
-pub fn parse<T: Reader>(input: &mut T) {
-    assert!(verify_magic(input));
-    assert!(verify_version(input));
+pub struct RdbParser<'a, T: 'a + Reader> {
+    input: &'a mut T
+}
 
-    let mut out = io::stdout();
-    loop {
-        let next_op = input.read_byte().unwrap();
-
-        match next_op {
-            op_codes::SELECTDB => {
-                let db = input.read_byte().unwrap();
-                println!("SELECTDB: {}", db);
-            },
-            op_codes::EOF => {
-                println!("EOF");
-                break ;
-            },
-            op_codes::EXPIRETIME_MS => {
-                let expiretime_ms = input.read_le_u64().unwrap();
-                println!("EXPIRETIME_MS: {}", expiretime_ms);
-            },
-            op_codes::EXPIRETIME => {
-                let expiretime = input.read_be_u32().unwrap();
-                println!("EXPIRETIME: {}", expiretime);
-            }
-            _ => {
-                let key = read_blob(input);
-                let _ = out.write(key[]);
-                let _ = out.write_str(": ");
-                let _ = out.flush();
-
-                match read_type(next_op, input) {
-                    DataType::String(t) => {
-                        let _ = out.write(t[]);
-                        let _ = out.write_str("\n");
-                    },
-                    DataType::Number(t) => { println!("{}", t) },
-                    DataType::ListOfTypes(t) => { println!("{}", t) },
-                    DataType::Intset(t) => { println!("{}", t) },
-                    DataType::Hash(t) => {
-                        for val in t.iter() {
-                            let _ = out.write(val[]);
-                            let _ = out.write_str(", ");
-                        }
-                        let _ = out.write_str("\n");
-                    },
-                    DataType::HashOfTypes(t) => { println!("{}", t) },
-                    _ => {}
-                }
-            }
-        }
-
+impl<'a, T: Reader> RdbParser<'a, T> {
+    pub fn new(input: &mut T) -> RdbParser<T> {
+        RdbParser{input: input}
     }
 
-    return;
+    pub fn parse(self) {
+        assert!(verify_magic(self.input));
+        assert!(verify_version(self.input));
 
+        let mut out = io::stdout();
+        loop {
+            let next_op = self.input.read_byte().unwrap();
+
+            match next_op {
+                op_codes::SELECTDB => {
+                    let db = self.input.read_byte().unwrap();
+                    println!("SELECTDB: {}", db);
+                },
+                op_codes::EOF => {
+                    println!("EOF");
+                    break ;
+                },
+                op_codes::EXPIRETIME_MS => {
+                    let expiretime_ms = self.input.read_le_u64().unwrap();
+                    println!("EXPIRETIME_MS: {}", expiretime_ms);
+                },
+                op_codes::EXPIRETIME => {
+                    let expiretime = self.input.read_be_u32().unwrap();
+                    println!("EXPIRETIME: {}", expiretime);
+                }
+                _ => {
+                    let key = read_blob(self.input);
+                    let _ = out.write(key[]);
+                    let _ = out.write_str(": ");
+                    let _ = out.flush();
+
+                    match read_type(next_op, self.input) {
+                        DataType::String(t) => {
+                            let _ = out.write(t[]);
+                            let _ = out.write_str("\n");
+                        },
+                        DataType::Number(t) => { println!("{}", t) },
+                        DataType::ListOfTypes(t) => { println!("{}", t) },
+                        DataType::Intset(t) => { println!("{}", t) },
+                        DataType::Hash(t) => {
+                            for val in t.iter() {
+                                let _ = out.write(val[]);
+                                let _ = out.write_str(", ");
+                            }
+                            let _ = out.write_str("\n");
+                        },
+                        DataType::HashOfTypes(t) => { println!("{}", t) },
+                        _ => {}
+                    }
+                }
+            }
+
+        }
+
+        return;
+
+    }
 }
 
 fn read_linked_list<T: Reader>(input: &mut T) -> Vec<Vec<u8>> {
