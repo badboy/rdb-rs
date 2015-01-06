@@ -1,4 +1,5 @@
 #![feature(slicing_syntax)]
+
 extern crate lzf;
 use std::str;
 use lzf::decompress;
@@ -13,7 +14,6 @@ mod version {
 mod constants {
     pub const RDB_6BITLEN : u8 = 0;
     pub const RDB_14BITLEN : u8 = 1;
-    pub const RDB_32BITLEN : u8 = 2;
     pub const RDB_ENCVAL : u8 = 3;
     pub const RDB_MAGIC : &'static str = "REDIS";
 }
@@ -60,26 +60,18 @@ pub enum DataType {
     Unknown
 }
 
-//pub fn type_mapping(in_type: u8) -> DataType {
-    //match in_type {
-        //0 => DataType::String,
-        //1 | 10 => DataType::List,
-        //2 | 11 => DataType::Set,
-        //3 | 12 => DataType::SortedSet,
-        //4 | 9 | 13 => DataType::Hash,
-        //_ => DataType::Unknown
-    //}
-//}
+#[derive(Show,PartialEq,Copy)]
+pub enum LengthEncoded {
+    LE(u32, bool)
+}
 
 pub fn parse<T: Reader>(input: &mut T) {
-
     assert!(verify_magic(input));
     assert!(verify_version(input));
 
     let mut out = io::stdout();
     loop {
         let next_op = input.read_byte().unwrap();
-        //println!("next_op: {:x}", next_op);
 
         match next_op {
             op_codes::SELECTDB => {
@@ -102,14 +94,26 @@ pub fn parse<T: Reader>(input: &mut T) {
                 let key = read_blob(input);
                 let _ = out.write(key[]);
                 let _ = out.write_str(": ");
+                let _ = out.flush();
 
                 match read_type(next_op, input) {
                     DataType::String(t) => {
                         let _ = out.write(t[]);
+                        let _ = out.write_str("\n");
                     },
-                    _ => {  }
+                    DataType::Number(t) => { println!("{}", t) },
+                    DataType::ListOfTypes(t) => { println!("{}", t) },
+                    DataType::Intset(t) => { println!("{}", t) },
+                    DataType::Hash(t) => {
+                        for val in t.iter() {
+                            let _ = out.write(val[]);
+                            let _ = out.write_str(", ");
+                        }
+                        let _ = out.write_str("\n");
+                    },
+                    DataType::HashOfTypes(t) => { println!("{}", t) },
+                    _ => {}
                 }
-                let _ = out.write_str("\n");
             }
         }
 
@@ -199,7 +203,7 @@ fn read_list_ziplist<T: Reader>(input: &mut T) -> Vec<DataType> {
                 length = (((flag & 0x3F) as u64) << 8) | next_byte as u64;
             },
             2 => {
-                length = input.read_le_u32().unwrap() as u64;
+                length = reader.read_be_u32().unwrap() as u64;
             },
             _ => {
                 match (flag & 0xF0) >> 4 {
@@ -238,9 +242,69 @@ fn read_list_ziplist<T: Reader>(input: &mut T) -> Vec<DataType> {
         let rawval = reader.read_exact(length as uint).unwrap();
         list.push(DataType::String(rawval));
     }
+    assert!(reader.read_byte().unwrap() == 0xFF);
 
     list
 }
+
+fn read_hash_zipmap<T: Reader>(input: &mut T) -> Vec<Vec<u8>> {
+    let zipmap = read_blob(input);
+
+    let mut reader = MemReader::new(zipmap);
+
+    let zmlen = reader.read_byte().unwrap();
+
+    let mut length;
+    let mut hash;
+    if zmlen <= 254 {
+        length = zmlen as uint;
+        hash = Vec::with_capacity(length);
+    } else {
+        length = -1;
+        hash = Vec::with_capacity(255);
+    }
+
+    loop {
+        let next_byte = reader.read_byte().unwrap();
+
+        if next_byte == 0xFF {
+            break; // End of list.
+        }
+
+        let mut elem_len;
+        match next_byte {
+            253 => { elem_len = reader.read_le_u32().unwrap() },
+            254 | 255 => { panic!("Invalid length value in zipmap: {}", next_byte) },
+            _ => { elem_len = next_byte as u32 }
+        }
+
+        let key = reader.read_exact(elem_len as uint).unwrap();
+        hash.push(key);
+
+        let next_byte = reader.read_byte().unwrap();
+        match next_byte {
+            253 => { elem_len = reader.read_le_u32().unwrap() },
+            254 | 255 => { panic!("Invalid length value in zipmap: {}", next_byte) },
+            _ => { elem_len = next_byte as u32 }
+        }
+
+        let _free = reader.read_byte().unwrap();
+        let value = reader.read_exact(elem_len as uint).unwrap();
+        hash.push(value);
+
+        if length > 0 {
+            length -= 1;
+        }
+
+        if length == 0 {
+            assert!(reader.read_byte().unwrap() == 0xFF);
+            break;
+        }
+    }
+
+    hash
+}
+
 fn read_set_intset<T: Reader>(input: &mut T) -> Vec<i64> {
     let mut set = vec![];
 
@@ -282,9 +346,7 @@ fn read_type<T: Reader>(value_type: u8, input: &mut T) -> DataType {
             DataType::Hash(read_hash(input))
         },
         types::HASH_ZIPMAP => {
-            println!("Value Type not implemented: {}", "HASH_ZIPMAP");
-            //DataType::Hash(read_hash_zipmap(input))
-            DataType::Hash(vec![])
+            DataType::Hash(read_hash_zipmap(input))
         },
         types::LIST_ZIPLIST => {
             DataType::ListOfTypes(read_list_ziplist(input))
