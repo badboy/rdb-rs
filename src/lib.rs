@@ -8,7 +8,7 @@ use std::io;
 
 mod version {
     pub const SUPPORTED_MINIMUM : u32 = 1;
-    pub const SUPPORTED_MAXIMUM : u32 = 6;
+    pub const SUPPORTED_MAXIMUM : u32 = 7;
 }
 
 mod constants {
@@ -19,6 +19,7 @@ mod constants {
 }
 
 mod op_codes {
+    pub const RESIZEDB : u8 = 251;
     pub const EXPIRETIME_MS : u8 = 252;
     pub const EXPIRETIME : u8 = 253;
     pub const SELECTDB   : u8 = 254;
@@ -98,6 +99,11 @@ impl<'a, T: Reader> RdbParser<'a, T> {
                 op_codes::EXPIRETIME => {
                     let expiretime = self.input.read_be_u32().unwrap();
                     println!("EXPIRETIME: {}", expiretime);
+                },
+                op_codes::RESIZEDB => {
+                    let db_size = read_length(self.input);
+                    let expires_size = read_length(self.input);
+                    println!("DB Size: {}, Expires Size: {}", db_size, expires_size);
                 }
                 _ => {
                     let key = read_blob(self.input);
