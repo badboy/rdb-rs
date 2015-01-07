@@ -84,7 +84,7 @@ impl<'a, T: Reader> RdbParser<'a, T> {
 
             match next_op {
                 op_codes::SELECTDB => {
-                    let db = self.input.read_byte().unwrap();
+                    let db = read_length(self.input);
                     println!("SELECTDB: {}", db);
                 },
                 op_codes::EOF => {
