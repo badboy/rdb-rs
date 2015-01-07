@@ -274,6 +274,19 @@ fn read_list_ziplist<T: Reader>(input: &mut T) -> Vec<DataType> {
     list
 }
 
+fn read_zipmap_entry<R: Reader>(next_byte: u8, input: &mut R) -> Vec<u8> {
+    let mut elem_len;
+    match next_byte {
+        253 => { elem_len = input.read_le_u32().unwrap() },
+        254 | 255 => {
+            panic!("Invalid length value in zipmap: {}", next_byte)
+        },
+        _ => { elem_len = next_byte as u32 }
+    }
+
+    input.read_exact(elem_len as uint).unwrap()
+}
+
 fn read_hash_zipmap<T: Reader>(input: &mut T) -> Vec<Vec<u8>> {
     let zipmap = read_blob(input);
 
@@ -298,25 +311,12 @@ fn read_hash_zipmap<T: Reader>(input: &mut T) -> Vec<Vec<u8>> {
             break; // End of list.
         }
 
-        let mut elem_len;
-        match next_byte {
-            253 => { elem_len = reader.read_le_u32().unwrap() },
-            254 | 255 => { panic!("Invalid length value in zipmap: {}", next_byte) },
-            _ => { elem_len = next_byte as u32 }
-        }
-
-        let key = reader.read_exact(elem_len as uint).unwrap();
+        let key = read_zipmap_entry(next_byte, &mut reader);
         hash.push(key);
 
         let next_byte = reader.read_byte().unwrap();
-        match next_byte {
-            253 => { elem_len = reader.read_le_u32().unwrap() },
-            254 | 255 => { panic!("Invalid length value in zipmap: {}", next_byte) },
-            _ => { elem_len = next_byte as u32 }
-        }
-
         let _free = reader.read_byte().unwrap();
-        let value = reader.read_exact(elem_len as uint).unwrap();
+        let value = read_zipmap_entry(next_byte, &mut reader);
         hash.push(value);
 
         if length > 0 {
