@@ -24,6 +24,11 @@ fn test_read_length() {
     assert_eq!(
         (0, true),
         read_length_with_encoding(&mut MemReader::new(vec!(0xC0))));
+
+    assert_eq!(
+        16383,
+        read_length(&mut MemReader::new(vec!(0x7f, 0xff)))
+        );
 }
 
 #[test]
