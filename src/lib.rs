@@ -74,9 +74,9 @@ impl<'a, T: Reader> RdbParser<'a, T> {
         RdbParser{input: input}
     }
 
-    pub fn parse(self) {
-        assert!(verify_magic(self.input));
-        assert!(verify_version(self.input));
+    pub fn parse(&mut self) {
+        assert!(self.verify_magic());
+        assert!(self.verify_version());
 
         let mut out = io::stdout();
         loop {
@@ -130,6 +130,29 @@ impl<'a, T: Reader> RdbParser<'a, T> {
 
         return;
 
+    }
+
+    pub fn verify_magic(&mut self) -> bool {
+        let magic = self.input.read_exact(5).unwrap();
+
+        // Meeeeeh.
+        magic[0] == constants::RDB_MAGIC.as_bytes()[0] &&
+            magic[1] == constants::RDB_MAGIC.as_bytes()[1] &&
+            magic[2] == constants::RDB_MAGIC.as_bytes()[2] &&
+            magic[3] == constants::RDB_MAGIC.as_bytes()[3] &&
+            magic[4] == constants::RDB_MAGIC.as_bytes()[4]
+    }
+
+    pub fn verify_version(&mut self) -> bool {
+        let version = self.input.read_exact(4).unwrap();
+
+        let version = (version[0]-48) as u32 * 1000 +
+            (version[1]-48) as u32 * 100 +
+            (version[2]-48) as u32 * 10 +
+            (version[3]-48) as u32;
+
+        version >= version::SUPPORTED_MINIMUM &&
+            version <= version::SUPPORTED_MAXIMUM
     }
 }
 
@@ -372,29 +395,6 @@ fn read_type<T: Reader>(value_type: u8, input: &mut T) -> DataType {
         },
         _ => { panic!("Value Type not implemented: {}", value_type) }
     }
-}
-
-pub fn verify_magic<T: Reader>(input: &mut T) -> bool {
-    let magic = input.read_exact(5).unwrap();
-
-    // Meeeeeh.
-    magic[0] == constants::RDB_MAGIC.as_bytes()[0] &&
-        magic[1] == constants::RDB_MAGIC.as_bytes()[1] &&
-        magic[2] == constants::RDB_MAGIC.as_bytes()[2] &&
-        magic[3] == constants::RDB_MAGIC.as_bytes()[3] &&
-        magic[4] == constants::RDB_MAGIC.as_bytes()[4]
-}
-
-pub fn verify_version<T: Reader>(input: &mut T) -> bool {
-    let version = input.read_exact(4).unwrap();
-
-    let version = (version[0]-48) as u32 * 1000 +
-        (version[1]-48) as u32 * 100 +
-        (version[2]-48) as u32 * 10 +
-        (version[3]-48) as u32;
-
-    version >= version::SUPPORTED_MINIMUM &&
-        version <= version::SUPPORTED_MAXIMUM
 }
 
 pub fn read_length_with_encoding<T: Reader>(input: &mut T) -> LengthEncoded {

@@ -16,7 +16,7 @@ fn main() {
     let file = File::open(&Path::new(args[1].to_string()));
     let mut reader = BufferedReader::new(file);
 
-    let parser = RdbParser::new(&mut reader);
+    let mut parser = RdbParser::new(&mut reader);
 
     parser.parse()
 }
