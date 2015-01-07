@@ -153,7 +153,7 @@ pub fn verify_version<R: Reader>(input: &mut R) -> bool {
         version <= version::SUPPORTED_MAXIMUM
 }
 
-fn read_linked_list<T: Reader>(input: &mut T) -> Vec<Vec<u8>> {
+fn read_linked_list<R: Reader>(input: &mut R) -> Vec<Vec<u8>> {
     let mut len = read_length(input);
     let mut list = vec![];
 
@@ -166,7 +166,7 @@ fn read_linked_list<T: Reader>(input: &mut T) -> Vec<Vec<u8>> {
     list
 }
 
-fn read_sorted_set<T: Reader>(input: &mut T) -> Vec<(f64,Vec<u8>)> {
+fn read_sorted_set<R: Reader>(input: &mut R) -> Vec<(f64,Vec<u8>)> {
     let mut set = vec![];
     let mut set_items = read_length(input);
 
@@ -185,7 +185,7 @@ fn read_sorted_set<T: Reader>(input: &mut T) -> Vec<(f64,Vec<u8>)> {
     set
 }
 
-fn read_hash<T: Reader>(input: &mut T) -> Vec<Vec<u8>> {
+fn read_hash<R: Reader>(input: &mut R) -> Vec<Vec<u8>> {
     let mut hash = vec![];
     let mut hash_items = read_length(input);
     hash_items = 2*hash_items;
@@ -258,7 +258,7 @@ fn read_ziplist_entry<R: Reader>(input: &mut R) -> DataType {
     DataType::String(rawval)
 }
 
-fn read_list_ziplist<T: Reader>(input: &mut T) -> Vec<DataType> {
+fn read_list_ziplist<R: Reader>(input: &mut R) -> Vec<DataType> {
     let ziplist = read_blob(input);
 
     let mut reader = MemReader::new(ziplist);
@@ -290,7 +290,7 @@ fn read_zipmap_entry<R: Reader>(next_byte: u8, input: &mut R) -> Vec<u8> {
     input.read_exact(elem_len as uint).unwrap()
 }
 
-fn read_hash_zipmap<T: Reader>(input: &mut T) -> Vec<Vec<u8>> {
+fn read_hash_zipmap<R: Reader>(input: &mut R) -> Vec<Vec<u8>> {
     let zipmap = read_blob(input);
 
     let mut reader = MemReader::new(zipmap);
@@ -335,7 +335,7 @@ fn read_hash_zipmap<T: Reader>(input: &mut T) -> Vec<Vec<u8>> {
     hash
 }
 
-fn read_set_intset<T: Reader>(input: &mut T) -> Vec<i64> {
+fn read_set_intset<R: Reader>(input: &mut R) -> Vec<i64> {
     let mut set = vec![];
 
     let intset = read_blob(input);
@@ -358,7 +358,7 @@ fn read_set_intset<T: Reader>(input: &mut T) -> Vec<i64> {
     set
 }
 
-fn read_type<T: Reader>(value_type: u8, input: &mut T) -> DataType {
+fn read_type<R: Reader>(value_type: u8, input: &mut R) -> DataType {
     match value_type {
         types::STRING => {
             DataType::String(read_blob(input))
@@ -394,7 +394,7 @@ fn read_type<T: Reader>(value_type: u8, input: &mut T) -> DataType {
     }
 }
 
-pub fn read_length_with_encoding<T: Reader>(input: &mut T) -> (u32, bool) {
+pub fn read_length_with_encoding<R: Reader>(input: &mut R) -> (u32, bool) {
     let mut length;
     let mut is_encoded = false;
 
@@ -420,12 +420,12 @@ pub fn read_length_with_encoding<T: Reader>(input: &mut T) -> (u32, bool) {
     (length, is_encoded)
 }
 
-pub fn read_length<T: Reader>(input: &mut T) -> u32 {
+pub fn read_length<R: Reader>(input: &mut R) -> u32 {
     let (length, _) = read_length_with_encoding(input);
     length
 }
 
-pub fn read_blob<T: Reader>(input: &mut T) -> Vec<u8> {
+pub fn read_blob<R: Reader>(input: &mut R) -> Vec<u8> {
     let (length, is_encoded) = read_length_with_encoding(input);
 
     if is_encoded {
