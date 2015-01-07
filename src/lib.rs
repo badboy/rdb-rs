@@ -66,100 +66,92 @@ pub enum LengthEncoded {
     LE(u32, bool)
 }
 
-pub struct RdbParser<'a, T: 'a + Reader> {
-    input: &'a mut T
-}
+pub fn parse<R: Reader>(input: &mut R) {
+    assert!(verify_magic(input));
+    assert!(verify_version(input));
 
-impl<'a, T: Reader> RdbParser<'a, T> {
-    pub fn new(input: &mut T) -> RdbParser<T> {
-        RdbParser{input: input}
-    }
+    let mut out = io::stdout();
+    loop {
+        let next_op = input.read_byte().unwrap();
 
-    pub fn parse(&mut self) {
-        assert!(self.verify_magic());
-        assert!(self.verify_version());
+        match next_op {
+            op_codes::SELECTDB => {
+                let db = read_length(input);
+                println!("SELECTDB: {}", db);
+            },
+            op_codes::EOF => {
+                println!("EOF");
+                let chksum = input.read_to_end().unwrap();
+                println!("checksum: {}", chksum);
+                break ;
+            },
+            op_codes::EXPIRETIME_MS => {
+                let expiretime_ms = input.read_le_u64().unwrap();
+                println!("EXPIRETIME_MS: {}", expiretime_ms);
+            },
+            op_codes::EXPIRETIME => {
+                let expiretime = input.read_be_u32().unwrap();
+                println!("EXPIRETIME: {}", expiretime);
+            },
+            op_codes::RESIZEDB => {
+                let db_size = read_length(input);
+                let expires_size = read_length(input);
+                println!("DB Size: {}, Expires Size: {}", db_size, expires_size);
+            }
+            _ => {
+                let key = read_blob(input);
+                let _ = out.write(key[]);
+                let _ = out.write_str(": ");
+                let _ = out.flush();
 
-        let mut out = io::stdout();
-        loop {
-            let next_op = self.input.read_byte().unwrap();
-
-            match next_op {
-                op_codes::SELECTDB => {
-                    let db = read_length(self.input);
-                    println!("SELECTDB: {}", db);
-                },
-                op_codes::EOF => {
-                    println!("EOF");
-                    break ;
-                },
-                op_codes::EXPIRETIME_MS => {
-                    let expiretime_ms = self.input.read_le_u64().unwrap();
-                    println!("EXPIRETIME_MS: {}", expiretime_ms);
-                },
-                op_codes::EXPIRETIME => {
-                    let expiretime = self.input.read_be_u32().unwrap();
-                    println!("EXPIRETIME: {}", expiretime);
-                },
-                op_codes::RESIZEDB => {
-                    let db_size = read_length(self.input);
-                    let expires_size = read_length(self.input);
-                    println!("DB Size: {}, Expires Size: {}", db_size, expires_size);
-                }
-                _ => {
-                    let key = read_blob(self.input);
-                    let _ = out.write(key[]);
-                    let _ = out.write_str(": ");
-                    let _ = out.flush();
-
-                    match read_type(next_op, self.input) {
-                        DataType::String(t) => {
-                            let _ = out.write(t[]);
-                            let _ = out.write_str("\n");
-                        },
-                        DataType::Number(t) => { println!("{}", t) },
-                        DataType::ListOfTypes(t) => { println!("{}", t) },
-                        DataType::Intset(t) => { println!("{}", t) },
-                        DataType::Hash(t) => {
-                            for val in t.iter() {
-                                let _ = out.write(val[]);
-                                let _ = out.write_str(", ");
-                            }
-                            let _ = out.write_str("\n");
-                        },
-                        DataType::HashOfTypes(t) => { println!("{}", t) },
-                        _ => {}
-                    }
+                match read_type(next_op, input) {
+                    DataType::String(t) => {
+                        let _ = out.write(t[]);
+                        let _ = out.write_str("\n");
+                    },
+                    DataType::Number(t) => { println!("{}", t) },
+                    DataType::ListOfTypes(t) => { println!("{}", t) },
+                    DataType::Intset(t) => { println!("{}", t) },
+                    DataType::Hash(t) => {
+                        for val in t.iter() {
+                            let _ = out.write(val[]);
+                            let _ = out.write_str(", ");
+                        }
+                        let _ = out.write_str("\n");
+                    },
+                    DataType::HashOfTypes(t) => { println!("{}", t) },
+                    _ => {}
                 }
             }
-
         }
 
-        return;
-
     }
 
-    pub fn verify_magic(&mut self) -> bool {
-        let magic = self.input.read_exact(5).unwrap();
+    return;
 
-        // Meeeeeh.
-        magic[0] == constants::RDB_MAGIC.as_bytes()[0] &&
-            magic[1] == constants::RDB_MAGIC.as_bytes()[1] &&
-            magic[2] == constants::RDB_MAGIC.as_bytes()[2] &&
-            magic[3] == constants::RDB_MAGIC.as_bytes()[3] &&
-            magic[4] == constants::RDB_MAGIC.as_bytes()[4]
-    }
+}
 
-    pub fn verify_version(&mut self) -> bool {
-        let version = self.input.read_exact(4).unwrap();
+pub fn verify_magic<R: Reader>(input: &mut R) -> bool {
+    let magic = input.read_exact(5).unwrap();
 
-        let version = (version[0]-48) as u32 * 1000 +
-            (version[1]-48) as u32 * 100 +
-            (version[2]-48) as u32 * 10 +
-            (version[3]-48) as u32;
+    // Meeeeeh.
+    magic[0] == constants::RDB_MAGIC.as_bytes()[0] &&
+        magic[1] == constants::RDB_MAGIC.as_bytes()[1] &&
+        magic[2] == constants::RDB_MAGIC.as_bytes()[2] &&
+        magic[3] == constants::RDB_MAGIC.as_bytes()[3] &&
+        magic[4] == constants::RDB_MAGIC.as_bytes()[4]
+}
 
-        version >= version::SUPPORTED_MINIMUM &&
-            version <= version::SUPPORTED_MAXIMUM
-    }
+pub fn verify_version<R: Reader>(input: &mut R) -> bool {
+    let version = input.read_exact(4).unwrap();
+
+    let version = (version[0]-48) as u32 * 1000 +
+        (version[1]-48) as u32 * 100 +
+        (version[2]-48) as u32 * 10 +
+        (version[3]-48) as u32;
+
+    version >= version::SUPPORTED_MINIMUM &&
+        version <= version::SUPPORTED_MAXIMUM
 }
 
 fn read_linked_list<T: Reader>(input: &mut T) -> Vec<Vec<u8>> {
