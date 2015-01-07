@@ -6,23 +6,23 @@ use std::io::MemReader;
 #[test]
 fn test_read_length() {
     assert_eq!(
-        LengthEncoded::LE(0, false),
+        (0, false),
         read_length_with_encoding(&mut MemReader::new(vec!(0x0)))
         );
 
     assert_eq!(
-        LengthEncoded::LE(16383, false),
+        (16383, false),
         read_length_with_encoding(&mut MemReader::new(vec!(0x7f, 0xff)))
         );
 
     assert_eq!(
-        LengthEncoded::LE(4294967295, false),
+        (4294967295, false),
         read_length_with_encoding(&mut MemReader::new(
                 vec!(0x80, 0xff, 0xff, 0xff, 0xff)))
         );
 
     assert_eq!(
-        LengthEncoded::LE(0, true),
+        (0, true),
         read_length_with_encoding(&mut MemReader::new(vec!(0xC0))));
 }
 
