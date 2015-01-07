@@ -197,9 +197,65 @@ fn read_hash<T: Reader>(input: &mut T) -> Vec<Vec<u8>> {
     hash
 }
 
-fn read_list_ziplist<T: Reader>(input: &mut T) -> Vec<DataType> {
-    let mut list = vec![];
+fn read_ziplist_entry<R: Reader>(input: &mut R) -> DataType {
+    // 1. 1 or 5 bytes length of previous entry
+    match input.read_byte().unwrap() {
+        254 => {
+            let _ = input.read_exact(4).unwrap();
+        },
+        _ => {}
+    }
 
+    let mut length : u64;
+    let mut number_value : i64;
+
+    // 2. Read flag or number value
+    let flag = input.read_byte().unwrap();
+
+    match (flag & 0xC0) >> 6 {
+        0 => { length = (flag & 0x3F) as u64 },
+        1 => {
+            let next_byte = input.read_byte().unwrap();
+            length = (((flag & 0x3F) as u64) << 8) | next_byte as u64;
+        },
+        2 => {
+            length = input.read_be_u32().unwrap() as u64;
+        },
+        _ => {
+            match (flag & 0xF0) >> 4 {
+                0xC => { number_value = input.read_le_i16().unwrap() as i64 },
+                0xD => { number_value = input.read_le_i32().unwrap() as i64 },
+                0xE => { number_value = input.read_le_i64().unwrap() as i64 },
+                0xF => {
+                    match flag & 0xF {
+                        0 => {
+                            let bytes = input.read_exact(3).unwrap();
+                            number_value = ((bytes[0] as i64) << 16) ^
+                                ((bytes[1] as i64) << 8) ^
+                                (bytes[2] as i64);
+                        },
+                        0xE => {
+                            number_value = input.read_byte().unwrap() as i64 },
+                            _ => { number_value = (flag & 0xF) as i64 - 1; }
+                    }
+                },
+                _ => {
+                    println!("Flag not handled: {}", flag);
+                    return DataType::Number(-42);
+                }
+
+            }
+
+            return DataType::Number(number_value)
+        }
+    }
+
+    // 3. Read value
+    let rawval = input.read_exact(length as uint).unwrap();
+    DataType::String(rawval)
+}
+
+fn read_list_ziplist<T: Reader>(input: &mut T) -> Vec<DataType> {
     let ziplist = read_blob(input);
 
     let mut reader = MemReader::new(ziplist);
@@ -207,68 +263,12 @@ fn read_list_ziplist<T: Reader>(input: &mut T) -> Vec<DataType> {
     let _zlbytes = reader.read_le_u32().unwrap();
     let _zltail = reader.read_le_u32().unwrap();
     let zllen = reader.read_le_u16().unwrap();
+    let mut list = Vec::with_capacity(zllen as uint);
 
     for _ in range(0, zllen) {
-        // 1. 1 or 5 bytes length of previous entry
-        match reader.read_byte().unwrap() {
-            254 => {
-                let _ = reader.read_exact(4).unwrap();
-            },
-            _ => {}
-        }
-
-        let mut length : u64;
-        let mut number_value : i64;
-
-        // 2. Read flag or number value
-        let flag = reader.read_byte().unwrap();
-
-        match (flag & 0xC0) >> 6 {
-            0 => { length = (flag & 0x3F) as u64 },
-            1 => {
-                let next_byte = reader.read_byte().unwrap();
-                length = (((flag & 0x3F) as u64) << 8) | next_byte as u64;
-            },
-            2 => {
-                length = reader.read_be_u32().unwrap() as u64;
-            },
-            _ => {
-                match (flag & 0xF0) >> 4 {
-                    0xC => {
-                        number_value = reader.read_le_i16().unwrap() as i64 },
-                    0xD => {
-                        number_value = reader.read_le_i32().unwrap() as i64 },
-                    0xE => {
-                        number_value = reader.read_le_i64().unwrap() as i64 },
-                    0xF => {
-                        match flag & 0xF {
-                            0 => {
-                                let bytes = reader.read_exact(3).unwrap();
-                                number_value = ((bytes[0] as i64) << 16) ^
-                                    ((bytes[1] as i64) << 8) ^
-                                    (bytes[2] as i64);
-                            },
-                            0xE => {
-                                number_value = reader.read_byte().unwrap() as i64 },
-                            _ => { number_value = (flag & 0xF) as i64 - 1; }
-                        }
-                    },
-                    _ => {
-                        println!("Flag not handled: {}", flag);
-                        continue;
-                    }
-
-                }
-
-                list.push(DataType::Number(number_value));
-                continue;
-            }
-        }
-
-        // 3. Read value
-        let rawval = reader.read_exact(length as uint).unwrap();
-        list.push(DataType::String(rawval));
+        list.push(read_ziplist_entry(&mut reader));
     }
+
     assert!(reader.read_byte().unwrap() == 0xFF);
 
     list
