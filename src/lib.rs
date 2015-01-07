@@ -6,6 +6,8 @@ use lzf::decompress;
 use std::io::MemReader;
 use std::io;
 
+mod helper;
+
 mod version {
     pub const SUPPORTED_MINIMUM : u32 = 1;
     pub const SUPPORTED_MAXIMUM : u32 = 7;
@@ -60,6 +62,7 @@ pub enum DataType {
     Hash(Vec<Vec<u8>>),
     Unknown
 }
+
 
 pub fn parse<R: Reader>(input: &mut R) {
     assert!(verify_magic(input));
@@ -422,23 +425,14 @@ pub fn read_length<T: Reader>(input: &mut T) -> u32 {
     length
 }
 
-fn int_to_vec(number: i32) -> Vec<u8> {
-    let number = number.to_string();
-    let mut result = Vec::with_capacity(number.len());
-    for &c in number.as_bytes().iter() {
-        result.push(c);
-    }
-    result
-}
-
 pub fn read_blob<T: Reader>(input: &mut T) -> Vec<u8> {
     let (length, is_encoded) = read_length_with_encoding(input);
 
     if is_encoded {
         match length {
-            encoding::INT8 => { int_to_vec(input.read_i8().unwrap() as i32) },
-            encoding::INT16 => { int_to_vec(input.read_le_i16().unwrap() as i32) },
-            encoding::INT32 => { int_to_vec(input.read_le_i32().unwrap() as i32) },
+            encoding::INT8 => { helper::int_to_vec(input.read_i8().unwrap() as i32) },
+            encoding::INT16 => { helper::int_to_vec(input.read_le_i16().unwrap() as i32) },
+            encoding::INT32 => { helper::int_to_vec(input.read_le_i32().unwrap() as i32) },
             encoding::LZF => {
                 let compressed_length = read_length(input);
                 let real_length = read_length(input);
