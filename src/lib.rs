@@ -61,11 +61,6 @@ pub enum DataType {
     Unknown
 }
 
-#[derive(Show,PartialEq,Copy)]
-pub enum LengthEncoded {
-    LE(u32, bool)
-}
-
 pub fn parse<R: Reader>(input: &mut R) {
     assert!(verify_magic(input));
     assert!(verify_version(input));
@@ -96,7 +91,8 @@ pub fn parse<R: Reader>(input: &mut R) {
             op_codes::RESIZEDB => {
                 let db_size = read_length(input);
                 let expires_size = read_length(input);
-                println!("DB Size: {}, Expires Size: {}", db_size, expires_size);
+                println!("DB Size: {}, Expires Size: {}",
+                         db_size, expires_size);
             }
             _ => {
                 let key = read_blob(input);
@@ -395,7 +391,7 @@ fn read_type<T: Reader>(value_type: u8, input: &mut T) -> DataType {
     }
 }
 
-pub fn read_length_with_encoding<T: Reader>(input: &mut T) -> LengthEncoded {
+pub fn read_length_with_encoding<T: Reader>(input: &mut T) -> (u32, bool) {
     let mut length;
     let mut is_encoded = false;
 
@@ -418,11 +414,11 @@ pub fn read_length_with_encoding<T: Reader>(input: &mut T) -> LengthEncoded {
         }
     }
 
-    LengthEncoded::LE(length, is_encoded)
+    (length, is_encoded)
 }
 
 pub fn read_length<T: Reader>(input: &mut T) -> u32 {
-    let LengthEncoded::LE(length, _) = read_length_with_encoding(input);
+    let (length, _) = read_length_with_encoding(input);
     length
 }
 
@@ -436,7 +432,7 @@ fn int_to_vec(number: i32) -> Vec<u8> {
 }
 
 pub fn read_blob<T: Reader>(input: &mut T) -> Vec<u8> {
-    let LengthEncoded::LE(length, is_encoded) = read_length_with_encoding(input);
+    let (length, is_encoded) = read_length_with_encoding(input);
 
     if is_encoded {
         match length {
