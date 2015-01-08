@@ -15,25 +15,32 @@ At a high level, the RDB file has the following structure
 52 45 44 49 53              # Magic String "REDIS"
 30 30 30 33                 # RDB Version Number as ASCII string. "0003" = 3
 ----------------------------
-FE 00                       # FE = code that indicates database selector. db number = 00
-----------------------------# Key-Value pair starts
-FD $unsigned-int            # FD indicates "expiry time in seconds", followed by 4 byte unsigned int
-$value-type                 # 1 byte flag indicating the type of value - set, map, sorted set etc.
-$string-encoded-key         # The key, encoded as a redis string
-$encoded-value              # The value. Encoding depends on $value-type
+FA                          # Auxiliary field
+$string-encoded-key         # May contain arbitrary metadata
+$string-encoded-value       # such as Redis version, creation time, used memory, ...
 ----------------------------
-FC $unsigned long           # FC indicates "expiry time in ms", followed by 8 byte unsigned long
+FE 00                       # Indicates database selector. db number = 00
+FB                          # Indicates a resizedb field
+$length-encoded-int         # Size of the corresponding hash table
+$length-encoded-int         # Size of the corresponding expire hash table
+----------------------------# Key-Value pair starts
+FD $unsigned-int            # "expiry time in seconds", followed by 4 byte unsigned int
 $value-type                 # 1 byte flag indicating the type of value
 $string-encoded-key         # The key, encoded as a redis string
-$encoded-value              # The value. Encoding depends on $value-type
+$encoded-value              # The value, encoding depends on $value-type
+----------------------------
+FC $unsigned long           # "expiry time in ms", followed by 8 byte unsigned long
+$value-type                 # 1 byte flag indicating the type of value
+$string-encoded-key         # The key, encoded as a redis string
+$encoded-value              # The value, encoding depends on $value-type
 ----------------------------
 $value-type                 # key-value pair without expiry
 $string-encoded-key
 $encoded-value
 ----------------------------
-FE $length-encoding         # Previous db ends, next db starts. Database number read using length encoding.
+FE $length-encoding         # Previous db ends, next db starts.
 ----------------------------
-...                         # Key value pairs for this database, additional database
+...                         # Additional key-value pairs, databases, ...
 
 FF                          ## End of RDB file indicator
 8-byte-checksum             ## CRC64 checksum of the entire file.
