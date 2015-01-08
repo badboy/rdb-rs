@@ -98,7 +98,7 @@ To migrate to version 2:
 
 This version introduced special encoding for small hashmaps, lists and sets.
 
-Specifically, it introduced the following encoding types -
+Specifically, it introduced the following encoding types:
 
     REDIS_RDB_TYPE_HASH_ZIPMAP = 9
     REDIS_RDB_TYPE_LIST_ZIPLIST = 10
