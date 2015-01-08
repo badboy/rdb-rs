@@ -4,7 +4,9 @@ This document tracks the changes made to the dump file format over time.
 
 An RDB file is forwards compatible. An older dump file format will always work with a newer version of Redis.
 
-## Version 7 (2014-01-08, integrated into Redis 2.9.x)
+## Version 7
+
+Introduced 2014-01-08, integrated into Redis 2.9.x.
 
 * New opcode: `RESIZEDB` (251). This encodes hash tables sizes to allow for faster loading.  
   Followed by two length-encoded integers indicating:
@@ -38,7 +40,7 @@ The following additions have been made :
 * Numbers between -128 and 127, both inclusive, are stored in 1 byte
 * Numbers between -2^23 and 2^23 -1, both inclusive, are stored in 3 bytes
 
-Issue ID : https://github.com/antirez/redis/issues/469
+Issue ID: [redis#469](https://github.com/antirez/redis/issues/469)
 
 To migrate to version 5:
 
@@ -52,7 +54,7 @@ To migrate to version 5:
 This version introduced an 8 byte checksum (CRC-32) at the end of the file. If checksum is disabled in redis.conf,
 the last 8 bytes will be zeroes.
 
-Issue ID : https://github.com/antirez/redis/issues/366
+Issue ID: [redis#366](https://github.com/antirez/redis/issues/366)
 
 To migrate to version 4:
 
@@ -68,7 +70,7 @@ the Zipmap encoding that was used in previous versions.
 "Hashmaps encoded as ziplists" has encoding type = 13. The value is parsed like a ziplist, and adjacent entries
 in the list are considered key=value pairs in the hashmap.
 
-Issue ID : https://github.com/antirez/redis/pull/285
+Issue ID: [redis#285](https://github.com/antirez/redis/pull/285)
 
 To migrate to version 3:
 
@@ -83,7 +85,7 @@ This version introduced key expiry with millisecond precision.
 Earlier versions stored key expiry in the format `0xFD <4 byte timestamp>`. In version 3, key expiry is stored as
 `0xFC <8 byte timestamp>`. Here, 0xFD and 0xFC are the opcodes to indicate key expiry in seconds and milliseconds respectively.
 
-Issue ID : https://github.com/antirez/redis/issues/169
+Issue ID: [redis#169](https://github.com/antirez/redis/issues/169)
 
 To migrate to version 2:
 
@@ -103,7 +105,7 @@ Specifically, it introduced the following encoding types -
     REDIS_RDB_TYPE_SET_INTSET = 11
     REDIS_RDB_TYPE_ZSET_ZIPLIST = 12
 
-Commit : https://github.com/antirez/redis/commit/6b52ad87c05ca2162a2d21f1f5b5329bf52a7678
+Commit: [redis#6b52ad87](https://github.com/antirez/redis/commit/6b52ad87c05ca2162a2d21f1f5b5329bf52a7678)
 
 To migrate to version 1:
 
