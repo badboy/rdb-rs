@@ -31,9 +31,9 @@ $value-type                 # This key value pair doesn't have an expiry. $value
 $string-encoded-key
 $encoded-value
 ----------------------------
-FE $length-encoding         # Previos db ends, next db starts. Database number read using length encoding.
+FE $length-encoding         # Previous db ends, next db starts. Database number read using length encoding.
 ----------------------------
-...                         # Key value pairs for this database, additonal database
+...                         # Key value pairs for this database, additional database
 
 FF                          ## End of RDB file indicator
 8 byte checksum             ## CRC 32 checksum of the entire file.
@@ -77,8 +77,8 @@ Each key value pair has 4 parts -
 This section starts with a one byte flag.
 This flag is either:
 
-* `OxFD`: The following expire value is specified in seconds. The following 4 bytes represent the unix timestamp as an unsigned integer.
-* `0xFC`: The following expire value is specified in milliseconds. The following 8 bytes represent the unix timestamp as an unsigned long.
+* `0xFD`: The following expire value is specified in seconds. The following 4 bytes represent the Unix timestamp as an unsigned integer.
+* `0xFC`: The following expire value is specified in milliseconds. The following 8 bytes represent the Unix timestamp as an unsigned long.
 
 **TODO**: See the section "Redis Length Encoding" on how this number is encoded.
 
@@ -88,17 +88,17 @@ During the import process, keys that have expired must be discarded.
 
 A one byte flag indicates encoding used to save the Value.
 
-* 0 =  [String Encoding](#string-encoding)
-* 1 =  [List Encoding](#list-encoding)
-* 2 =  [Set Encoding](#set-encoding)
-* 3 =  [Sorted Set Encoding](#sorted-set-encoding)
-* 4 =  [Hash Encoding](#hash-encoding)
-* 9 =  [Zipmap Encoding](#zipmap-encoding)
-* 10 = [Ziplist Encoding](#ziplist-encoding)
-* 11 = [Intset Encoding](#intset-encoding)
-* 12 = [Sorted Set in Ziplist Encoding](#ziplist-encoding-sorted-set)
-* 13 = [Hashmap in Ziplist Encoding](#ziplist-encoding-hash) (Introduced in RDB version 4)
-* 14 = [List in Quicklist encoding](#quicklist-encoding) (Introduced in RDB version 7)
+* ` 0` =  [String Encoding](#string-encoding)
+* ` 1` =  [List Encoding](#list-encoding)
+* ` 2` =  [Set Encoding](#set-encoding)
+* ` 3` =  [Sorted Set Encoding](#sorted-set-encoding)
+* ` 4` =  [Hash Encoding](#hash-encoding)
+* ` 9` =  [Zipmap Encoding](#zipmap-encoding)
+* `10` = [Ziplist Encoding](#ziplist-encoding)
+* `11` = [Intset Encoding](#intset-encoding)
+* `12` = [Sorted Set in Ziplist Encoding](#ziplist-encoding-sorted-set)
+* `13` = [Hashmap in Ziplist Encoding](#ziplist-encoding-hash) (Introduced in RDB version 4)
+* `14` = [List in Quicklist encoding](#quicklist-encoding) (Introduced in RDB version 7)
 
 ### Key
 
@@ -121,14 +121,14 @@ This is how length encoding works :
 * One byte is read from the stream, and the two most significant bits are read.
 * If starting bits are `00`, then the next 6 bits represent the length
 * If starting bits are `01`, then an additional byte is read from the stream. The combined 14 bits represent the length
-* If starting bits are `10`, then the remaining 6 bits are discared. Additional 4 bytes are read from the stream, and those 4 bytes represent the length
+* If starting bits are `10`, then the remaining 6 bits are discarded. Additional 4 bytes are read from the stream, and those 4 bytes represent the length
 * If starting bits are `11`, then the next object is encoded in a special format. The remaining 6 bits indicate the format. This encoding is generally used to store numbers as strings, or to store encoded strings. See String Encoding
 
 As a result of this encoding -
 
-* Numbers upto and including 63 can be stored in 1 byte
-* Numbers upto and including 16383 can be stored in 2 bytes
-* Numbers upto 2^32 -1 can be stored in 4 bytes
+* Numbers up to and including 63 can be stored in 1 byte
+* Numbers up to and including 16383 can be stored in 2 bytes
+* Numbers up to 2^32 -1 can be stored in 4 bytes
 
 ## String Encoding<a name="string-encoding"></a>
 
@@ -209,7 +209,7 @@ The structure of a zipmap within this string is as follows -
 
 `18 02 06 4D 4B 44 31 47 36 01 00 32 05 59 4E 4E 58 4b 04 00 46 37 54 49 FF ..`
 
-* Start by decoding this using [String Encoding](#string-encoding). You will notice that `0x18` (24 in decimal) is the length of the string. Accordingly, we will read the next 24 bytes i.e. upto `FF`
+* Start by decoding this using [String Encoding](#string-encoding). You will notice that `0x18` (24 in decimal) is the length of the string. Accordingly, we will read the next 24 bytes i.e. up to `FF`
 * Now, we are parsing the string starting at `02 06... ` using the [Zipmap Encoding](#zipmap-encoding)
 * `02` is the number of entries in the hashmap.
 * `06` is the length of the next string. Since this is less than 254, we don't have to read any additional bytes
@@ -230,14 +230,14 @@ The structure of a zipmap within this string is as follows -
 
 A Ziplist is a list that has been serialized to a string. In essence, the elements of the list are stored sequentially along with flags and offsets to allow efficient traversal of the list in both directions.
 
-To parse a ziplist, first a string is read from thee stream using [String Encoding](#string-encoding).
+To parse a ziplist, first a string is read from the stream using [String Encoding](#string-encoding).
 This string is the envelope of the ziplist. The contents of this string represent the ziplist.
 
 The structure of a ziplist within this string is as follows -
 
 `<zlbytes><zltail><zllen><entry><entry><zlend>`
 
-* `zlbytes` : This is a 4 byte unsigned integer representing the total size in bytes of the zip list. The 4 bytes are in little endian format - the least signinficant bit comes first.
+* `zlbytes` : This is a 4 byte unsigned integer representing the total size in bytes of the zip list. The 4 bytes are in little endian format - the least significant bit comes first.
 * `zltail` : This is a 4 byte unsigned integer in little endian format. It represents the offset to the tail (i.e. last) entry in the zip list
 * `zllen` : This is a 2 byte unsigned integer in little endian format. It represents the number of entries in this zip list
 * `entry` : An entry represents an element in the zip list. Details below
@@ -269,7 +269,7 @@ The various encodings of this flag are shown below :
 * Now, we are parsing the string starting at `23 00 00 ...` using [Ziplist encoding](#ziplist-encoding)
 * The first 4 bytes `23 00 00 00` represent the total length in bytes of this ziplist. Notice that this is in little endian format
 * The next 4 bytes `1e 00 00 00` represent the offset to the tail entry. `1E` = 30 (in decimal), and this is a 0 based offset. 0th position = `23`, 1st position = `00` and so on. It follows that the last entry starts at `04 c0 3f 00 ..`
-* The next 2 bytes `04 00` represent the number of entries in this list as a big endian 16 bit integer. `04 00 = 4` in deicmal.
+* The next 2 bytes `04 00` represent the number of entries in this list as a big endian 16 bit integer. `04 00 = 4` in decimal.
 * From now on, we start reading the entries
 * `00` represents the length of previous entry. `0` indicates this is the first entry.
 * `E0` is the special flag. Since it starts with the bit pattern `1110____`, we read the next 8 bytes as an integer. This is the first entry of the list.
@@ -288,7 +288,7 @@ The various encodings of this flag are shown below :
 
 ## Intset Encoding<a name="intset-encoding"></a>
 
-An Intset is a binary search tree of integers. The binary tree is implemented in an array of integers. An intset is used when all the elements of the set are integers. An Intset has support for upto 64 bit integers. As an optimization, if the integers can be represented in fewer bytes, the array of integers will be constructed from 16 bit or 32 bit integers. When a new element is inserted, the implementation takes care to upgrade if necessary.
+An Intset is a binary search tree of integers. The binary tree is implemented in an array of integers. An intset is used when all the elements of the set are integers. An Intset has support for up to 64 bit integers. As an optimization, if the integers can be represented in fewer bytes, the array of integers will be constructed from 16 bit or 32 bit integers. When a new element is inserted, the implementation takes care to upgrade if necessary.
 
 Since an Intset is a binary search tree, the numbers in this set will always be sorted.
 
@@ -312,7 +312,7 @@ Within this string, the Intset has a very simple layout :
 * The first 4 bytes `04 00 00 00` is the encoding. Since this evaluates to 4, we know we are dealing with 32 bit integers
 * The next 4 bytes `03 00 00 00` is the length of contents. So, we know we are dealing with 3 integers, each 4 byte long
 * From now on, we read in groups of 4 bytes, and convert it into a unsigned integer
-* Thus, our intset looks like `[0x0000FFFC, 0x0000FFFD, 0x0000FFFE]`. Notice that the integers are in little endian format i.e. least signinficant bit came first.
+* Thus, our intset looks like `[0x0000FFFC, 0x0000FFFD, 0x0000FFFE]`. Notice that the integers are in little endian format i.e. least significant bit came first.
 
 ## Sorted Set as Ziplist Encoding<a name="ziplist-encoding-sorted-set"></a>
 
@@ -320,7 +320,7 @@ A sorted list in ziplist encoding is stored just like the Ziplist described abov
 
 **Example**
 
-`['Manchester City', 1, 'Manchester United', 2, 'Totenham', 3]`
+`['Manchester City', 1, 'Manchester United', 2, 'Tottenham', 3]`
 
 As you see, the scores follow each element.
 
@@ -345,5 +345,4 @@ is stored in a ziplist as :
 ### CRC32 Check Sum
 
 Starting with RDB Version 5, an 8 byte CRC 32 checksum is added to the end of the file. It is possible to disable this checksum via a parameter in redis.conf.
-When checksuming is disabled, this field will have zeroes.
-
+When the checksum is disabled, this field will have zeroes.
