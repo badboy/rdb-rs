@@ -140,7 +140,7 @@ Length prefixed strings are quite simple. The length of the string in bytes is f
 
 #### Integers as String<a name="integers-as-strings"></a>
 
-First read the section [Length Encoding](#length-encoding), specifically the part when the first two bits are @11@. In this case, the remaining 6 bits are read.
+First read the section [Length Encoding](#length-encoding), specifically the part when the first two bits are `11`. In this case, the remaining 6 bits are read.
 If the value of those 6 bits is -
 
 * 0 indicates that an 8 bit integer follows
@@ -192,7 +192,9 @@ This string is the envelope of the zipmap. The contents of this string represent
 
 The structure of a zipmap within this string is as follows -
 
-`<zmlen><len>"foo"<len><free>"bar"<len>"hello"<len><free>"world"<zmend>`
+```
+<zmlen><len>"foo"<len><free>"bar"<len>"hello"<len><free>"world"<zmend>
+```
 
 * `zmlen` : Is a 1 byte length that holds the size of the zip map. If it is greater than or equal to 254, value is not used. You will have to iterate the entire zip map to find the length.
 * `len` : Is the length of the following string, which can be either a key or a value. This length is stored in either 1 byte or 5 bytes (yes, it differs from "Length Encoding" described above). If the first byte is between 0 and 252, that is the length of the zipmap. If the first byte is 253, then the next 4 bytes read as an unsigned integer represent the length of the zipmap. 254 and 255 are invalid values for this field.
@@ -229,7 +231,9 @@ This string is the envelope of the ziplist. The contents of this string represen
 
 The structure of a ziplist within this string is as follows -
 
-`<zlbytes><zltail><zllen><entry><entry><zlend>`
+```
+<zlbytes><zltail><zllen><entry><entry><zlend>
+```
 
 * `zlbytes` : This is a 4 byte unsigned integer representing the total size in bytes of the zip list. The 4 bytes are in little endian format - the least significant bit comes first.
 * `zltail` : This is a 4 byte unsigned integer in little endian format. It represents the offset to the tail (i.e. last) entry in the zip list
@@ -239,7 +243,9 @@ The structure of a ziplist within this string is as follows -
 
 Each entry in the zip list has the following format :
 
-`<length-prev-entry><special-flag><raw-bytes-of-entry>`
+```
+<length-prev-entry><special-flag><raw-bytes-of-entry>
+```
 
 `length-prev-entry`: This field stores the length of the previous entry, or 0 if this is the first entry. This allows easy traversal of the list in the reverse direction. This length is stored in either 1 byte or in 5 bytes. If the first byte is less than or equal to 253, it is considered as the length. If the first byte is 254, then the next 4 bytes are used to store the length. The 4 bytes are read as an unsigned integer.
 
@@ -291,7 +297,10 @@ An Intset has an external interface of a Set.
 To parse an Intset, first a string is read from thee stream using [String Encoding](#string-encoding). This string is the envelope of the Intset. The contents of this string represent the Intset.
 
 Within this string, the Intset has a very simple layout :
-`<encoding><length-of-contents><contents>`
+
+```
+<encoding><length-of-contents><contents>
+```
 
 * `encoding`: is a 32 bit unsigned integer. It has 3 possible values - 2, 4 or 8. It indicates the size in bytes of each integer stored in contents. And yes, this is wasteful - we could have stored the same information in 2 bits.
 * `length-of-contents`: is a 32 bit unsigned integer, and indicates the length of the contents array
@@ -336,7 +345,7 @@ is stored in a ziplist as :
 
 **TODO**
 
-### CRC32 Check Sum
+## CRC32 Check Sum
 
 Starting with RDB Version 5, an 8 byte CRC 32 checksum is added to the end of the file. It is possible to disable this checksum via a parameter in redis.conf.
 When the checksum is disabled, this field will have zeroes.
