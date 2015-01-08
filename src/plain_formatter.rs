@@ -36,13 +36,18 @@ impl RdbParseFormatter for PlainFormatter {
     fn set(&mut self, key: Vec<u8>, value: Vec<u8>) {
         let _ = self.out.write(key[]);
         let _ = self.out.write_str(": ");
-        let _ = self.out.flush();
 
         let _ = self.out.write(value[]);
         let _ = self.out.write_str("\n");
+        let _ = self.out.flush();
     }
 
     fn aux_field(&mut self, key: Vec<u8>, value: Vec<u8>) {
-        println!("Aux field => {}: {}", key, value);
+        let _ = self.out.write_str("[aux] ");
+        let _ = self.out.write(key[]);
+        let _ = self.out.write_str(": ");
+        let _ = self.out.write(value[]);
+        let _ = self.out.write_str("\n");
+        let _ = self.out.flush();
     }
 }
