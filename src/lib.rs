@@ -57,7 +57,7 @@ mod encoding {
     pub const LZF : u32 = 3;
 }
 
-#[derive(Show)]
+#[derive(Show,Clone)]
 pub enum DataType {
     String(Vec<u8>),
     Number(i64),
@@ -374,6 +374,17 @@ fn read_set_intset<R: Reader>(input: &mut R) -> Vec<i64> {
     set
 }
 
+fn read_quicklist<R: Reader>(input: &mut R) -> Vec<DataType> {
+    let len = read_length(input);
+
+    let mut list = vec![];
+    for _ in range(0, len) {
+        let zl = read_list_ziplist(input);
+        list.push_all(zl.as_slice());
+    }
+    list
+}
+
 fn read_type<R: Reader>(value_type: u8, input: &mut R) -> DataType {
     match value_type {
         types::STRING => {
@@ -407,7 +418,7 @@ fn read_type<R: Reader>(value_type: u8, input: &mut R) -> DataType {
             DataType::ListOfTypes(read_list_ziplist(input))
         },
         types::LIST_QUICKLIST => {
-            panic!("Quicklist not yet implemented");
+            DataType::ListOfTypes(read_quicklist(input))
         },
         _ => { panic!("Value Type not implemented: {}", value_type) }
     }
