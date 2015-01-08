@@ -1,10 +1,10 @@
 # Redis RDB File Format
 
-Redis \*.rdb file is a binary representation of the in-memory store. This binary file is sufficient to completely restore Redis' state.
+Redis' RDB file is a binary representation of the in-memory store. This binary file is sufficient to completely restore Redis' state.
 
 The RDB file format is optimized for fast read and writes. Where possible LZF compression is used to reduce the file size. In general, objects are prefixed with their lengths, so before reading the object you know exactly how much memory to allocate.
 
-Optimizing for fast read/writes means the on-disk format should be as close as possible to the in-memory representation. This is the approach taken by the RDB file. As a consequence, you cannot parse the rdb file without some understanding of Redis' in-memory representation of data structures
+Optimizing for fast read/writes means the on-disk format should be as close as possible to the in-memory representation. This is the approach taken by the RDB file. As a consequence, you cannot parse the RDB file without some understanding of Redis' in-memory representation of data structures.
 
 ## High Level Algorithm to parse RDB
 
