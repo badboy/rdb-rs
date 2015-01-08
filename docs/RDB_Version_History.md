@@ -51,7 +51,7 @@ To migrate to version 5:
 
 ## Version 5
 
-This version introduced an 8 byte checksum (CRC-32) at the end of the file. If checksum is disabled in redis.conf,
+This version introduced an 8 byte checksum (CRC64) at the end of the file. If checksum is disabled in redis.conf,
 the last 8 bytes will be zeroes.
 
 Issue ID: [redis#366](https://github.com/antirez/redis/issues/366)

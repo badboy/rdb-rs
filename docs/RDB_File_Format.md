@@ -36,7 +36,7 @@ FE $length-encoding         # Previous db ends, next db starts. Database number 
 ...                         # Key value pairs for this database, additional database
 
 FF                          ## End of RDB file indicator
-8-byte-checksum             ## CRC 32 checksum of the entire file.
+8-byte-checksum             ## CRC64 checksum of the entire file.
 ```
 
 
@@ -408,7 +408,7 @@ A complete list needs to be constructed from all elements of all ziplists.
 ```
 
 
-## CRC32 Check Sum
+## CRC64 Checksum
 
-Starting with RDB Version 5, an 8 byte CRC 32 checksum is added to the end of the file. It is possible to disable this checksum via a parameter in redis.conf.
+Starting with RDB Version 5, an 8 byte CRC64 checksum is added to the end of the file. It is possible to disable this checksum via a parameter in redis.conf.
 When the checksum is disabled, this field will have zeroes.
