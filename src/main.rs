@@ -1,5 +1,3 @@
-#![feature(globs)]
-
 extern crate rdb;
 use std::os;
 use std::io::{BufferedReader, File};
