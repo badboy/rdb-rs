@@ -61,14 +61,14 @@ The next 4 bytes store the version number of the rdb format. The 4 bytes are int
 Each part after the initial header is introduced by a special op code.
 The available op codes are:
 
-| Byte | Name | Description |
-|------+------+-------------|
-| 0xFF | EOF  | End of the RDB file
-| 0xFE | SELECTDB | [Database Selector](#database-selector)
-| 0xFD | EXPIRETIME | Expire time in seconds, see [Key Expiry Timestamp](#key-expiry-timestamp)
-| 0xFC | EXPIRETIMEMS | Expire time in milliseconds, see [Key Expiry Timestamp](#key-expiry-timestamp)
-| 0xFB | RESIZEDB | Hash table sizes for the main keyspace and expires, see [Resizedb information](#resizedb)
-| 0xFA | AUX | Auxiliary fields. Arbitrary key-value settings, see [Auxiliary fields](#aux-fields)
+| Byte | Name         | Description |
+| ---- | ------------ | ----------- |
+| 0xFF | EOF          | End of the RDB file |
+| 0xFE | SELECTDB     | [Database Selector](#database-selector) |
+| 0xFD | EXPIRETIME   | Expire time in seconds, see [Key Expiry Timestamp](#key-expiry-timestamp) |
+| 0xFC | EXPIRETIMEMS | Expire time in milliseconds, see [Key Expiry Timestamp](#key-expiry-timestamp) |
+| 0xFB | RESIZEDB     | Hash table sizes for the main keyspace and expires, see [Resizedb information](#resizedb) |
+| 0xFA | AUX          | Auxiliary fields. Arbitrary key-value settings, see [Auxiliary fields](#aux-fields) |
 
 ## Database Selector
 
