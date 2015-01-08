@@ -11,23 +11,23 @@ Optimizing for fast read/writes means the on-disk format should be as close as p
 At a high level, the RDB file has the following structure
 
 ```
-----------------------------# RDB is a binary format. There are no new lines or spaces in the file.
+----------------------------#
 52 45 44 49 53              # Magic String "REDIS"
-30 30 30 33                 # RDB Version Number in big endian. In this case, version = 0003 = 3
+30 30 30 33                 # RDB Version Number as ASCII string. "0003" = 3
 ----------------------------
 FE 00                       # FE = code that indicates database selector. db number = 00
 ----------------------------# Key-Value pair starts
-FD $unsigned-int            # FD indicates "expiry time in seconds". After that, expiry time is read as a 4 byte unsigned int
+FD $unsigned-int            # FD indicates "expiry time in seconds", followed by 4 byte unsigned int
 $value-type                 # 1 byte flag indicating the type of value - set, map, sorted set etc.
 $string-encoded-key         # The key, encoded as a redis string
 $encoded-value              # The value. Encoding depends on $value-type
 ----------------------------
-FC $unsigned long           # FC indicates "expiry time in ms". After that, expiry time is read as a 8 byte unsigned long
-$value-type                 # 1 byte flag indicating the type of value - set, map, sorted set etc.
+FC $unsigned long           # FC indicates "expiry time in ms", followed by 8 byte unsigned long
+$value-type                 # 1 byte flag indicating the type of value
 $string-encoded-key         # The key, encoded as a redis string
 $encoded-value              # The value. Encoding depends on $value-type
 ----------------------------
-$value-type                 # This key value pair doesn't have an expiry. $value_type guaranteed != to FD, FC, FE and FF
+$value-type                 # key-value pair without expiry
 $string-encoded-key
 $encoded-value
 ----------------------------
@@ -36,10 +36,11 @@ FE $length-encoding         # Previous db ends, next db starts. Database number 
 ...                         # Key value pairs for this database, additional database
 
 FF                          ## End of RDB file indicator
-8 byte checksum             ## CRC 32 checksum of the entire file.
+8-byte-checksum             ## CRC 32 checksum of the entire file.
 ```
 
-## Magic Number<a name="magic-number"></a>
+
+## Magic Number
 
 The file starts off with the magic string "REDIS". This is a quick sanity check to know we are dealing with a redis rdb file.
 
@@ -47,7 +48,7 @@ The file starts off with the magic string "REDIS". This is a quick sanity check 
 52 45 44 49 53  # "REDIS"
 ```
 
-## RDB Version Number<a name="version-number"></a>
+## RDB Version Number
 
 The next 4 bytes store the version number of the rdb format. The 4 bytes are interpreted as ASCII characters and then converted to an integer using string to integer conversion.
 
@@ -55,24 +56,62 @@ The next 4 bytes store the version number of the rdb format. The 4 bytes are int
 30 30 30 33 # "0003" => Version 3
 ```
 
-## Database Selector<a name="database-selector"></a>
+## Op Codes
+
+Each part after the initial header is introduced by a special op code.
+The available op codes are:
+
+| Byte | Name | Description |
+|------+------+-------------|
+| 0xFF | EOF  | End of the RDB file
+| 0xFE | SELECTDB | [Database Selector](#database-selector)
+| 0xFD | EXPIRETIME | Expire time in seconds, see [Key Expiry Timestamp](#key-expiry-timestamp)
+| 0xFC | EXPIRETIMEMS | Expire time in milliseconds, see [Key Expiry Timestamp](#key-expiry-timestamp)
+| 0xFB | RESIZEDB | Hash table sizes for the main keyspace and expires, see [Resizedb information](#resizedb)
+| 0xFA | AUX | Auxiliary fields. Arbitrary key-value settings, see [Auxiliary fields](#aux-fields)
+
+## Database Selector
 
 A Redis instance can have multiple databases.
 
 A single byte `0xFE` flags the start of the database selector. After this byte, a variable length field indicates the database number. See the section [Length Encoding](#length-encoding) to understand how to read this database number.
 
-## Key Value Pairs<a name="key-value-pairs"></a>
+## Resizedb information
+
+This op code was introduced in RDB version 7.
+
+It encodes two values to speed up RDB loading by avoiding additional resizes and rehashing.
+The op code is followed by two [length-encoded](#length-encoded) integers indicating:
+
+* Database hash table size
+* Expiry hash table size
+
+## Auxiliary fields
+
+This op code was introduced in RDB version 7.
+
+The op code is followed by two [Redis Strings](#string-encoding), representing the key and value of a setting.
+Unknown fields should be ignored by a parser.
+
+Currently the following settings are implemented:
+
+* `redis-ver`: The Redis Version that wrote the RDB
+* `redis-bits`: Bit architecture of the system that wrote the RDB, either 32 or 64
+* `ctime`: Creation time of the RDB
+* `used-mem`: Used memory of the instance that wrote the RDB
+
+## Key Value Pairs
 
 After the database selector, the file contains a sequence of key value pairs.
 
-Each key value pair has 4 parts -
+Each key value pair has 4 parts:
 
 * Key Expiry Timestamp. This is optional.
 * 1 byte flag indicating the value type.
 * The key, encoded as a Redis String. See [String Encoding](#string-encoding).
 * The value, encoded according to the value type. See [Value Encoding](#value-encoding).
 
-### Key Expiry Timestamp<a name="expire-timestamp"></a>
+### Key Expiry Timestamp
 
 This section starts with a one byte flag.
 This flag is either:
@@ -82,7 +121,7 @@ This flag is either:
 
 During the import process, keys that have expired must be discarded.
 
-### Value Type<a name="value-type"></a>
+### Value Type
 
 A one byte flag indicates encoding used to save the Value.
 
@@ -94,19 +133,19 @@ A one byte flag indicates encoding used to save the Value.
 * ` 9` =  [Zipmap Encoding](#zipmap-encoding)
 * `10` = [Ziplist Encoding](#ziplist-encoding)
 * `11` = [Intset Encoding](#intset-encoding)
-* `12` = [Sorted Set in Ziplist Encoding](#ziplist-encoding-sorted-set)
-* `13` = [Hashmap in Ziplist Encoding](#ziplist-encoding-hash) (Introduced in RDB version 4)
+* `12` = [Sorted Set in Ziplist Encoding](#sorted-set-in-ziplist-encoding)
+* `13` = [Hashmap in Ziplist Encoding](#hashmap-in-ziplist-encoding) (Introduced in RDB version 4)
 * `14` = [List in Quicklist encoding](#quicklist-encoding) (Introduced in RDB version 7)
 
-### Key<a name="key"></a>
+### Key
 
 The key is simply encoded as a Redis string. See the section [String Encoding](#string-encoding) to learn how the key is encoded.
 
-### Value<a name="value"></a>
+### Value
 
 The value is parsed according to the previously read [Value Type](#value-type)
 
-## Length Encoding<a name="length-encoding"></a>
+## Length Encoding
 
 Length encoding is used to store the length of the next object in the stream. Length encoding is a variable byte encoding designed to use as few bytes as possible.
 
@@ -124,7 +163,7 @@ As a result of this encoding -
 * Numbers up to and including 16383 can be stored in 2 bytes
 * Numbers up to 2^32 -1 can be stored in 4 bytes
 
-## String Encoding<a name="string-encoding"></a>
+## String Encoding
 
 Redis Strings are binary safe - which means you can store anything in them. They do not have any special end-of-string token. It is best to think of Redis Strings as a byte array.
 
@@ -134,11 +173,11 @@ There are three types of Strings in Redis -
 * An 8, 16 or 32 bit integer
 * A LZF compressed string
 
-#### Length Prefixed String<a name="length-prefixed"></a>
+#### Length Prefixed String
 
-Length prefixed strings are quite simple. The length of the string in bytes is first encoded using "Length Encoding". After this, the raw bytes of the string are stored.
+Length prefixed strings are quite simple. The length of the string in bytes is first encoded using [Length Encoding](#length-encoding). After this, the raw bytes of the string are stored.
 
-#### Integers as String<a name="integers-as-strings"></a>
+#### Integers as String
 
 First read the section [Length Encoding](#length-encoding), specifically the part when the first two bits are `11`. In this case, the remaining 6 bits are read.
 If the value of those 6 bits is -
@@ -147,7 +186,7 @@ If the value of those 6 bits is -
 * 1 indicates that a 16 bit integer follows
 * 2 indicates that a 32 bit integer follows
 
-#### Compressed Strings<a name="compressed-strings"></a>
+#### Compressed Strings
 
 First read the section [Length Encoding](#length-encoding), specifically the part when the first two bits are `11`. In this case, the remaining 6 bits are read.
 If the value of those 6 bits is 4, it indicates that a compressed string follows.
@@ -159,7 +198,7 @@ The compressed string is read as follows -
 * The next `clen` bytes are read from the stream
 * Finally, these bytes are decompressed using LZF algorithm
 
-## List Encoding<a name="list-encoding"></a>
+## List Encoding
 
 A Redis list is represented as a sequence of strings.
 
@@ -167,28 +206,28 @@ A Redis list is represented as a sequence of strings.
 * Next, `size` strings are read from the stream using [String Encoding](#string-encoding)
 * The list is then re-constructed using these Strings
 
-## Set Encoding<a name="set-encoding"></a>
+## Set Encoding
 
 Sets are encoded exactly like lists.
 
-## Sorted Set Encoding<a name="sorted-set-encoding"></a>
+## Sorted Set Encoding
 
 * First, the size of the sorted set `size` is read from the stream using [Length Encoding](#length-encoding)
 * **TODO**
 
-## Hash Encoding<a name="hash-encoding"></a>
+## Hash Encoding
 
 * First, the size of the hash @size@ is read from the stream using [Length Encoding](#length-encoding)
 * Next ` 2 * size ` strings are read from the stream using [String Encoding](#string-encoding)
 * Alternate strings are key and values
 * For example, `2 us washington india delhi` represents the map `{"us" => "washington", "india" => "delhi"}`
 
-## Zipmap Encoding<a name="zipmap-encoding"></a>
+## Zipmap Encoding
 
 A Zipmap is a hashmap that has been serialized to a string. In essence, the key value pairs are stored sequentially. Looking up a key in this structure is O(N). This structure is used instead of a dictionary when the number of key value pairs are small.
 
 To parse a zipmap, first a string is read from the stream using [String Encoding](#string-encoding).
-This string is the envelope of the zipmap. The contents of this string represent the zipmap.
+The contents of this string represent the zipmap.
 
 The structure of a zipmap within this string is as follows -
 
@@ -197,7 +236,7 @@ The structure of a zipmap within this string is as follows -
 ```
 
 * `zmlen` : Is a 1 byte length that holds the size of the zip map. If it is greater than or equal to 254, value is not used. You will have to iterate the entire zip map to find the length.
-* `len` : Is the length of the following string, which can be either a key or a value. This length is stored in either 1 byte or 5 bytes (yes, it differs from "Length Encoding" described above). If the first byte is between 0 and 252, that is the length of the zipmap. If the first byte is 253, then the next 4 bytes read as an unsigned integer represent the length of the zipmap. 254 and 255 are invalid values for this field.
+* `len` : Is the length of the following string, which can be either a key or a value. This length is stored in either 1 byte or 5 bytes (yes, it differs from [Length Encoding](#length-encoding) described above). If the first byte is between 0 and 252, that is the length of the zipmap. If the first byte is 253, then the next 4 bytes read as an unsigned integer represent the length of the zipmap. 254 and 255 are invalid values for this field.
 * `free` : This is always 1 byte, and indicates the number of free bytes _after_ the value. For example, if the value of a key is "America" and its get updated to "USA", 4 free bytes will be available.
 * `zmend` : Always 255. Indicates the end of the zipmap.
 
@@ -222,12 +261,12 @@ The structure of a zipmap within this string is as follows -
 * Finally, we encounter `FF`, which indicates the end of this zip map
 * Thus, this zip map represents the hash `{"MKD1G6" => "2", "YNNXK" => "F7TI"}`
 
-## Ziplist Encoding<a name="ziplist-encoding"></a>
+## Ziplist Encoding
 
 A Ziplist is a list that has been serialized to a string. In essence, the elements of the list are stored sequentially along with flags and offsets to allow efficient traversal of the list in both directions.
 
 To parse a ziplist, first a string is read from the stream using [String Encoding](#string-encoding).
-This string is the envelope of the ziplist. The contents of this string represent the ziplist.
+The contents of this string represent the ziplist.
 
 The structure of a ziplist within this string is as follows -
 
@@ -286,7 +325,7 @@ The various encodings of this flag are shown below :
 * Finally, we encounter `FF`, which tells us we have consumed all elements in this ziplist.
 * Thus, this ziplist stores the values `[0x7fffffffffffffff, 65535, 16380, 63]`
 
-## Intset Encoding<a name="intset-encoding"></a>
+## Intset Encoding
 
 An Intset is a binary search tree of integers. The binary tree is implemented in an array of integers. An intset is used when all the elements of the set are integers. An Intset has support for up to 64 bit integers. As an optimization, if the integers can be represented in fewer bytes, the array of integers will be constructed from 16 bit or 32 bit integers. When a new element is inserted, the implementation takes care to upgrade if necessary.
 
@@ -294,7 +333,8 @@ Since an Intset is a binary search tree, the numbers in this set will always be 
 
 An Intset has an external interface of a Set.
 
-To parse an Intset, first a string is read from thee stream using [String Encoding](#string-encoding). This string is the envelope of the Intset. The contents of this string represent the Intset.
+To parse an Intset, first a string is read from thee stream using [String Encoding](#string-encoding).
+The contents of this string represent the Intset.
 
 Within this string, the Intset has a very simple layout :
 
@@ -317,7 +357,7 @@ Within this string, the Intset has a very simple layout :
 * From now on, we read in groups of 4 bytes, and convert it into a unsigned integer
 * Thus, our intset looks like `[0x0000FFFC, 0x0000FFFD, 0x0000FFFE]`. Notice that the integers are in little endian format i.e. least significant bit came first.
 
-## Sorted Set as Ziplist Encoding<a name="ziplist-encoding-sorted-set"></a>
+## Sorted Set in Ziplist Encoding
 
 A sorted list in ziplist encoding is stored just like the Ziplist described above. Each element in the sorted set is followed by its score in the ziplist.
 
@@ -327,7 +367,7 @@ A sorted list in ziplist encoding is stored just like the Ziplist described abov
 
 As you see, the scores follow each element.
 
-## Hashmap in Ziplist Encoding<a name="ziplist-encoding-hash"></a>
+## Hashmap in Ziplist Encoding
 
 In this, key=value pairs of a hashmap are stored as successive entries in a ziplist.
 
@@ -341,9 +381,32 @@ is stored in a ziplist as :
 
 `["us", "washington", "india", "delhi"]`
 
-## List in Quicklist Encoding<a name="quicklist-encoding"></a>
+## Quicklist Encoding
 
-**TODO**
+RDB Version 7 introduced a new variant of list encoding: The quicklist.
+
+Quicklist is a linked list of ziplists. Quicklist combines the memory efficiency of small ziplists with the extensibility of a linked list allowing us to create space-efficient lists of any length.
+
+To parse a quicklist, first a string is read from the stream using [String Encoding](#string-encoding).
+The contents of this string represent the ziplist.
+
+The structure of a quicklist within this string is as follows -
+
+```
+<len><ziplist><ziplist>...
+```
+
+* `len`: This is the number of nodes of the linked list, [length-encoded](#length-encoding)
+* `ziplist`: A string that wraps a ziplist, parse it with [Ziplist encoding](#ziplist-encoding)
+
+A complete list needs to be constructed from all elements of all ziplists.
+
+**Example**:
+
+```
+01 00 0e 09 71 75 ...
+```
+
 
 ## CRC32 Check Sum
 
