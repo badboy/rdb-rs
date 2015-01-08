@@ -4,6 +4,8 @@ extern crate rdb;
 use std::os;
 use std::io::{BufferedReader, File};
 
+use rdb::PlainFormatter;
+
 pub fn main() {
     let args = os::args();
     if args.len() == 1 {
@@ -14,5 +16,7 @@ pub fn main() {
     let file = File::open(&Path::new(args[1].to_string()));
     let mut reader = BufferedReader::new(file);
 
-    rdb::parse(&mut reader)
+    let mut formatter = PlainFormatter::new();
+
+    rdb::parse(&mut reader, &mut formatter)
 }

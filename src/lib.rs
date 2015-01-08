@@ -5,8 +5,15 @@ use std::str;
 use lzf::decompress;
 use std::io::MemReader;
 use std::io;
+use formatter::RdbParseFormatter;
+
+pub use plain_formatter::PlainFormatter;
 
 mod helper;
+
+pub mod formatter;
+pub mod plain_formatter;
+
 
 mod version {
     pub const SUPPORTED_MINIMUM : u32 = 1;
@@ -65,23 +72,28 @@ pub enum DataType {
 }
 
 
-pub fn parse<R: Reader>(input: &mut R) {
+pub fn parse<R: Reader, F: RdbParseFormatter>(input: &mut R, formatter: &mut F) {
     assert!(verify_magic(input));
     assert!(verify_version(input));
 
+    formatter.start_rdb();
+
     let mut out = io::stdout();
+    let mut last_database : u32 = 0;
     loop {
         let next_op = input.read_byte().unwrap();
 
         match next_op {
             op_codes::SELECTDB => {
-                let db = read_length(input);
-                println!("SELECTDB: {}", db);
+                last_database = read_length(input);
+                formatter.start_database(last_database);
             },
             op_codes::EOF => {
-                println!("EOF");
-                let chksum = input.read_to_end().unwrap();
-                println!("checksum: {}", chksum);
+                formatter.end_database(last_database);
+                formatter.end_rdb();
+
+                let checksum = input.read_to_end().unwrap();
+                formatter.checksum(checksum);
                 break ;
             },
             op_codes::EXPIRETIME_MS => {
@@ -106,14 +118,10 @@ pub fn parse<R: Reader>(input: &mut R) {
             },
             _ => {
                 let key = read_blob(input);
-                let _ = out.write(key[]);
-                let _ = out.write_str(": ");
-                let _ = out.flush();
 
                 match read_type(next_op, input) {
                     DataType::String(t) => {
-                        let _ = out.write(t[]);
-                        let _ = out.write_str("\n");
+                        formatter.set(key, t);
                     },
                     DataType::Number(t) => { println!("{}", t) },
                     DataType::ListOfTypes(t) => { println!("{}", t) },
