@@ -21,6 +21,7 @@ mod constants {
 }
 
 mod op_codes {
+    pub const AUX : u8 = 250;
     pub const RESIZEDB : u8 = 251;
     pub const EXPIRETIME_MS : u8 = 252;
     pub const EXPIRETIME : u8 = 253;
@@ -96,7 +97,13 @@ pub fn parse<R: Reader>(input: &mut R) {
                 let expires_size = read_length(input);
                 println!("DB Size: {}, Expires Size: {}",
                          db_size, expires_size);
-            }
+            },
+            op_codes::AUX => {
+                let auxkey = read_blob(input);
+                let auxval = read_blob(input);
+
+                formatter.aux_field(auxkey, auxval);
+            },
             _ => {
                 let key = read_blob(input);
                 let _ = out.write(key[]);
