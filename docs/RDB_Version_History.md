@@ -40,7 +40,7 @@ The following additions have been made :
 
 Issue ID : https://github.com/antirez/redis/issues/469
 
-To migrate to version 5 :
+To migrate to version 5:
 
 * In redis.conf, set `list-max-ziplist-entries` to 0
 * Restart Redis Server, and issue the `SAVE` command
@@ -54,7 +54,7 @@ the last 8 bytes will be zeroes.
 
 Issue ID : https://github.com/antirez/redis/issues/366
 
-To migrate to version 4 -
+To migrate to version 4:
 
 * Delete the last 8 bytes of the file (i.e. after the byte `0xFF`)
 * Change the rdb version in the header to `REDIS0004`
@@ -70,7 +70,7 @@ in the list are considered key=value pairs in the hashmap.
 
 Issue ID : https://github.com/antirez/redis/pull/285
 
-To migrate to version 3 -
+To migrate to version 3:
 
 * In redis.conf, set `hash-max-ziplist-entries` to 0
 * Restart Redis Server, and issue the `SAVE` command
@@ -85,7 +85,7 @@ Earlier versions stored key expiry in the format `0xFD <4 byte timestamp>`. In v
 
 Issue ID : https://github.com/antirez/redis/issues/169
 
-To migrate to version 2 -
+To migrate to version 2:
 
 * If you don't use key expiry, simply change the version in the header to `REDIS0002`
 * If you use key expiry, you can still migrate, but there will be some loss in expiry precision. Also, the migration is a bit involved.
@@ -105,7 +105,7 @@ Specifically, it introduced the following encoding types -
 
 Commit : https://github.com/antirez/redis/commit/6b52ad87c05ca2162a2d21f1f5b5329bf52a7678
 
-To migrate to version 1 -
+To migrate to version 1:
 
 * In redis.conf, set the following properties to 0 `hash-max-zipmap-entries, list-max-ziplist-entries, set-max-intset-entries, zset-max-ziplist-entries`
 * Restart Redis, and issue the SAVE command
