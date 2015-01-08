@@ -34,7 +34,7 @@ $encoded-value
 FE $length-encoding         # Previos db ends, next db starts. Database number read using length encoding.
 ----------------------------
 ...                         # Key value pairs for this database, additonal database
-                            
+
 FF                          ## End of RDB file indicator
 8 byte checksum             ## CRC 32 checksum of the entire file.
 ```
@@ -80,7 +80,7 @@ This flag is either:
 * `OxFD`: The following expire value is specified in seconds. The following 4 bytes represent the unix timestamp as an unsigned integer.
 * `0xFC`: The following expire value is specified in milliseconds. The following 8 bytes represent the unix timestamp as an unsigned long.
 
-TODO: See the section "Redis Length Encoding" on how this number is encoded.
+**TODO**: See the section "Redis Length Encoding" on how this number is encoded.
 
 During the import process, keys that have expired must be discarded.
 
@@ -96,7 +96,7 @@ A one byte flag indicates encoding used to save the Value.
 * 9 =  [Zipmap Encoding](#zipmap-encoding)
 * 10 = [Ziplist Encoding](#ziplist-encoding)
 * 11 = [Intset Encoding](#intset-encoding)
-* 12 = [Sorted Set in Ziplist Encoding](#ziplist-encoding-sortedset)
+* 12 = [Sorted Set in Ziplist Encoding](#ziplist-encoding-sorted-set)
 * 13 = [Hashmap in Ziplist Encoding](#ziplist-encoding-hash) (Introduced in RDB version 4)
 * 14 = [List in Quicklist encoding](#quicklist-encoding) (Introduced in RDB version 7)
 
@@ -112,7 +112,7 @@ The encoding of the value depends on the value type flag.
 * 9, 10, 11, 12: the value is wrapped in a string. After reading the string, it must be parsed further.
 * 1, 2, 3 or 4: the value is a sequence of strings. This sequence of strings is used to construct a list, set, sorted set or hashmap.
 
-## Length Encoding
+## Length Encoding<a name="length-encoding"></a>
 
 Length encoding is used to store the length of the next object in the stream. Length encoding is a variable byte encoding designed to use as few bytes as possible.
 
@@ -130,7 +130,7 @@ As a result of this encoding -
 * Numbers upto and including 16383 can be stored in 2 bytes
 * Numbers upto 2^32 -1 can be stored in 4 bytes
 
-## String Encoding
+## String Encoding<a name="string-encoding"></a>
 
 Redis Strings are binary safe - which means you can store anything in them. They do not have any special end-of-string token. It is best to think of Redis Strings as a byte array.
 
@@ -140,11 +140,11 @@ There are three types of Strings in Redis -
 * An 8, 16 or 32 bit integer
 * A LZF compressed string
 
-#### Length Prefixed String
+#### Length Prefixed String<a name="length-prefixed"></a>
 
 Length prefixed strings are quite simple. The length of the string in bytes is first encoded using "Length Encoding". After this, the raw bytes of the string are stored.
 
-#### Integers as String
+#### Integers as String<a name="integers-as-strings"></a>
 
 First read the section [Length Encoding](#length-encoding), specifically the part when the first two bits are @11@. In this case, the remaining 6 bits are read.
 If the value of those 6 bits is -
@@ -153,7 +153,7 @@ If the value of those 6 bits is -
 * 1 indicates that a 16 bit integer follows
 * 2 indicates that a 32 bit integer follows
 
-#### Compressed Strings
+#### Compressed Strings<a name="compressed-strings"></a>
 
 First read the section [Length Encoding](#length-encoding), specifically the part when the first two bits are `11`. In this case, the remaining 6 bits are read.
 If the value of those 6 bits is 4, it indicates that a compressed string follows.
@@ -165,7 +165,7 @@ The compressed string is read as follows -
 * The next `clen` bytes are read from the stream
 * Finally, these bytes are decompressed using LZF algorithm
 
-## List Encoding
+## List Encoding<a name="list-encoding"></a>
 
 A Redis list is represented as a sequence of strings.
 
@@ -173,23 +173,23 @@ A Redis list is represented as a sequence of strings.
 * Next, `size` strings are read from the stream using [String Encoding](#string-encoding)
 * The list is then re-constructed using these Strings
 
-## Set Encoding
+## Set Encoding<a name="set-encoding"></a>
 
 Sets are encoded exactly like lists.
 
-## Sorted Set Encoding
+## Sorted Set Encoding<a name="sorted-set-encoding"></a>
 
 * First, the size of the sorted set `size` is read from the stream using [Length Encoding](#length-encoding)
-* TODO
+* **TODO**
 
-## Hash Encoding
+## Hash Encoding<a name="hash-encoding"></a>
 
 * First, the size of the hash @size@ is read from the stream using [Length Encoding](#length-encoding)
 * Next ` 2 * size ` strings are read from the stream using [String Encoding](#string-encoding)
 * Alternate strings are key and values
 * For example, `2 us washington india delhi` represents the map `{"us" => "washington", "india" => "delhi"}`
 
-## Zipmap Encoding
+## Zipmap Encoding<a name="zipmap-encoding"></a>
 
 A Zipmap is a hashmap that has been serialized to a string. In essence, the key value pairs are stored sequentially. Looking up a key in this structure is O(N). This structure is used instead of a dictionary when the number of key value pairs are small.
 
@@ -226,7 +226,7 @@ The structure of a zipmap within this string is as follows -
 * Finally, we encounter `FF`, which indicates the end of this zip map
 * Thus, this zip map represents the hash `{"MKD1G6" => "2", "YNNXK" => "F7TI"}`
 
-## Ziplist Encoding
+## Ziplist Encoding<a name="ziplist-encoding"></a>
 
 A Ziplist is a list that has been serialized to a string. In essence, the elements of the list are stored sequentially along with flags and offsets to allow efficient traversal of the list in both directions.
 
@@ -255,11 +255,11 @@ The various encodings of this flag are shown below :
 * `|00pppppp|` - 1 byte : String value with length less than or equal to 63 bytes (6 bits).
 * `|01pppppp|qqqqqqqq|` - 2 bytes : String value with length less than or equal to 16383 bytes (14 bits).
 * `|10______|qqqqqqqq|rrrrrrrr|ssssssss|tttttttt|` - 5 bytes : String value with length greater than or equal to 16384 bytes.
-* `|1100____|` - 1 byte : Integer encoded as int16_t (2 bytes).
-* `|1101____|` - 1 byte : Integer encoded as int32_t (4 bytes).
-* `|1110____|` - 1 byte : Integer encoded as int64_t (8 bytes).
+* `|1100____|` - 1 byte : Integer encoded as 16 bit Integer (2 bytes).
+* `|1101____|` - 1 byte : Integer encoded as 32 bit Integer (4 bytes).
+* `|1110____|` - 1 byte : Integer encoded as 64 bit Integer (8 bytes).
 
-`raw-Byte`: After the special flag, the raw bytes of entry follow. The number of bytes was previously determined as part of the special flag.
+`raw-byte`: After the special flag, the raw bytes of entry follow. The number of bytes was previously determined as part of the special flag.
 
 **Example 1**
 
@@ -286,7 +286,7 @@ The various encodings of this flag are shown below :
 * Finally, we encounter `FF`, which tells us we have consumed all elements in this ziplist.
 * Thus, this ziplist stores the values `[0x7fffffffffffffff, 65535, 16380, 63]`
 
-## Intset Encoding
+## Intset Encoding<a name="intset-encoding"></a>
 
 An Intset is a binary search tree of integers. The binary tree is implemented in an array of integers. An intset is used when all the elements of the set are integers. An Intset has support for upto 64 bit integers. As an optimization, if the integers can be represented in fewer bytes, the array of integers will be constructed from 16 bit or 32 bit integers. When a new element is inserted, the implementation takes care to upgrade if necessary.
 
@@ -314,7 +314,7 @@ Within this string, the Intset has a very simple layout :
 * From now on, we read in groups of 4 bytes, and convert it into a unsigned integer
 * Thus, our intset looks like `[0x0000FFFC, 0x0000FFFD, 0x0000FFFE]`. Notice that the integers are in little endian format i.e. least signinficant bit came first.
 
-## Sorted Set as Ziplist Encoding
+## Sorted Set as Ziplist Encoding<a name="ziplist-encoding-sorted-set"></a>
 
 A sorted list in ziplist encoding is stored just like the Ziplist described above. Each element in the sorted set is followed by its score in the ziplist.
 
@@ -324,7 +324,7 @@ A sorted list in ziplist encoding is stored just like the Ziplist described abov
 
 As you see, the scores follow each element.
 
-## Hashmap in Ziplist Encoding
+## Hashmap in Ziplist Encoding<a name="ziplist-encoding-hash"></a>
 
 In this, key=value pairs of a hashmap are stored as successive entries in a ziplist.
 
@@ -333,11 +333,14 @@ Note: This was introduced in RDB version 4. This deprecates zipmap encoding that
 **Example**
 
 `{"us" => "washington", "india" => "delhi"}`
-   
+
 is stored in a ziplist as :
-   
+
 `["us", "washington", "india", "delhi"]`
-   
+
+## List in Quicklist Encoding<a name="quicklist-encoding"></a>
+
+**TODO**
 
 ### CRC32 Check Sum
 
