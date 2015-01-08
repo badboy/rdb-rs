@@ -152,29 +152,33 @@ The key is simply encoded as a Redis string. See the section [String Encoding](#
 
 The value is parsed according to the previously read [Value Type](#value-type)
 
-## Length Encoding
+## Encodings
+
+### Length Encoding
 
 Length encoding is used to store the length of the next object in the stream. Length encoding is a variable byte encoding designed to use as few bytes as possible.
 
 This is how length encoding works :
+Read one byte from the stream, compare the two most significant bits:
 
-* One byte is read from the stream, and the two most significant bits are read.
-* If starting bits are `00`, then the next 6 bits represent the length
-* If starting bits are `01`, then an additional byte is read from the stream. The combined 14 bits represent the length
-* If starting bits are `10`, then the remaining 6 bits are discarded. Additional 4 bytes are read from the stream, and those 4 bytes represent the length
-* If starting bits are `11`, then the next object is encoded in a special format. The remaining 6 bits indicate the format. This encoding is generally used to store numbers as strings, or to store encoded strings. See String Encoding
+| Bits | How to parse |
+| ---- | ------------ |
+| `00` | The next 6 bits represent the length |
+| `01` | Read one additional byte. The combined 14 bits represent the length |
+| `10` | Discard the remaining 6 bits. The next 4 bytes from the stream represent the length |
+| `11` | The next object is encoded in a special format. The remaining 6 bits indicate the format. May be used to store numbers or Strings, see [String Encoding](#string-encoding) |
 
-As a result of this encoding -
+As a result of this encoding:
 
 * Numbers up to and including 63 can be stored in 1 byte
 * Numbers up to and including 16383 can be stored in 2 bytes
 * Numbers up to 2^32 -1 can be stored in 4 bytes
 
-## String Encoding
+### String Encoding
 
 Redis Strings are binary safe - which means you can store anything in them. They do not have any special end-of-string token. It is best to think of Redis Strings as a byte array.
 
-There are three types of Strings in Redis -
+There are three types of Strings in Redis:
 
 * Length prefixed strings
 * An 8, 16 or 32 bit integer
@@ -187,25 +191,26 @@ Length prefixed strings are quite simple. The length of the string in bytes is f
 #### Integers as String
 
 First read the section [Length Encoding](#length-encoding), specifically the part when the first two bits are `11`. In this case, the remaining 6 bits are read.
-If the value of those 6 bits is -
 
-* 0 indicates that an 8 bit integer follows
-* 1 indicates that a 16 bit integer follows
-* 2 indicates that a 32 bit integer follows
+If the value of those 6 bits is:
+
+* `0` indicates that an 8 bit integer follows
+* `1` indicates that a 16 bit integer follows
+* `2` indicates that a 32 bit integer follows
 
 #### Compressed Strings
 
 First read the section [Length Encoding](#length-encoding), specifically the part when the first two bits are `11`. In this case, the remaining 6 bits are read.
 If the value of those 6 bits is 4, it indicates that a compressed string follows.
 
-The compressed string is read as follows -
+The compressed string is read as follows:
 
 * The compressed length `clen` is read from the stream using [Length Encoding](#length-encoding)
 * The uncompressed length is read from the stream using [Length Encoding](#length-encoding)
 * The next `clen` bytes are read from the stream
 * Finally, these bytes are decompressed using LZF algorithm
 
-## List Encoding
+### List Encoding
 
 A Redis list is represented as a sequence of strings.
 
@@ -213,45 +218,55 @@ A Redis list is represented as a sequence of strings.
 * Next, `size` strings are read from the stream using [String Encoding](#string-encoding)
 * The list is then re-constructed using these Strings
 
-## Set Encoding
+### Set Encoding
 
 Sets are encoded exactly like lists.
 
-## Sorted Set Encoding
+### Sorted Set Encoding
 
 * First, the size of the sorted set `size` is read from the stream using [Length Encoding](#length-encoding)
 * **TODO**
 
-## Hash Encoding
+### Hash Encoding
 
-* First, the size of the hash @size@ is read from the stream using [Length Encoding](#length-encoding)
-* Next ` 2 * size ` strings are read from the stream using [String Encoding](#string-encoding)
-* Alternate strings are key and values
-* For example, `2 us washington india delhi` represents the map `{"us" => "washington", "india" => "delhi"}`
+* First, the `size` of the hash is read from the stream using [Length Encoding](#length-encoding)
+* Next ` 2 * size ` strings are read from the stream using [String Encoding](#string-encoding) (alternate strings are key and values)
 
-## Zipmap Encoding
+**Example:**
+
+```
+2 us washington india delhi
+```
+
+represents the map
+
+```
+{"us" => "washington", "india" => "delhi"}
+```
+
+### Zipmap Encoding
 
 A Zipmap is a hashmap that has been serialized to a string. In essence, the key value pairs are stored sequentially. Looking up a key in this structure is O(N). This structure is used instead of a dictionary when the number of key value pairs are small.
 
 To parse a zipmap, first a string is read from the stream using [String Encoding](#string-encoding).
 The contents of this string represent the zipmap.
 
-The structure of a zipmap within this string is as follows -
+The structure of a zipmap within this string is as follows:
 
 ```
 <zmlen><len>"foo"<len><free>"bar"<len>"hello"<len><free>"world"<zmend>
 ```
 
-* `zmlen` : Is a 1 byte length that holds the size of the zip map. If it is greater than or equal to 254, value is not used. You will have to iterate the entire zip map to find the length.
-* `len` : Is the length of the following string, which can be either a key or a value. This length is stored in either 1 byte or 5 bytes (yes, it differs from [Length Encoding](#length-encoding) described above). If the first byte is between 0 and 252, that is the length of the zipmap. If the first byte is 253, then the next 4 bytes read as an unsigned integer represent the length of the zipmap. 254 and 255 are invalid values for this field.
+* `zmlen`: 1 byte that holds the size of the zip map. If it is greater than or equal to 254, value is not used. You will have to iterate the entire zip map to find the length.
+* `len`: the length of the following string, which can be either a key or a value. This length is stored in either 1 byte or 5 bytes (yes, it differs from [Length Encoding](#length-encoding) described above). If the first byte is between 0 and 252, that is the length of the zipmap. If the first byte is 253, then the next 4 bytes read as an unsigned integer represent the length of the zipmap. 254 and 255 are invalid values for this field.
 * `free` : This is always 1 byte, and indicates the number of free bytes _after_ the value. For example, if the value of a key is "America" and its get updated to "USA", 4 free bytes will be available.
-* `zmend` : Always 255. Indicates the end of the zipmap.
+* `zmend` : Always `255`. Indicates the end of the zipmap.
 
-**Example**
+**Example:**
 
 `18 02 06 4D 4B 44 31 47 36 01 00 32 05 59 4E 4E 58 4b 04 00 46 37 54 49 FF ..`
 
-* Start by decoding this using [String Encoding](#string-encoding). You will notice that `0x18` (24 in decimal) is the length of the string. Accordingly, we will read the next 24 bytes i.e. up to `FF`
+* Start by decoding this using [String Encoding](#string-encoding). You will notice that `0x18` (`24` in decimal) is the length of the string. Accordingly, we will read the next 24 bytes i.e. up to `FF`
 * Now, we are parsing the string starting at `02 06... ` using the [Zipmap Encoding](#zipmap-encoding)
 * `02` is the number of entries in the hashmap.
 * `06` is the length of the next string. Since this is less than 254, we don't have to read any additional bytes
@@ -268,48 +283,53 @@ The structure of a zipmap within this string is as follows -
 * Finally, we encounter `FF`, which indicates the end of this zip map
 * Thus, this zip map represents the hash `{"MKD1G6" => "2", "YNNXK" => "F7TI"}`
 
-## Ziplist Encoding
+### Ziplist Encoding
 
 A Ziplist is a list that has been serialized to a string. In essence, the elements of the list are stored sequentially along with flags and offsets to allow efficient traversal of the list in both directions.
 
 To parse a ziplist, first a string is read from the stream using [String Encoding](#string-encoding).
 The contents of this string represent the ziplist.
 
-The structure of a ziplist within this string is as follows -
+The structure of a ziplist within this string is as follows:
 
 ```
 <zlbytes><zltail><zllen><entry><entry><zlend>
 ```
 
-* `zlbytes` : This is a 4 byte unsigned integer representing the total size in bytes of the zip list. The 4 bytes are in little endian format - the least significant bit comes first.
-* `zltail` : This is a 4 byte unsigned integer in little endian format. It represents the offset to the tail (i.e. last) entry in the zip list
-* `zllen` : This is a 2 byte unsigned integer in little endian format. It represents the number of entries in this zip list
-* `entry` : An entry represents an element in the zip list. Details below
-* `zlend` : Is always equal to `255`. It represents the end of the zip list.
+* `zlbytes`: a 4 byte unsigned integer representing the total size in bytes of the ziplist. The 4 bytes are in little endian format - the least significant bit comes first.
+* `zltail`: a 4 byte unsigned integer in little endian format. It represents the offset to the tail (i.e. last) entry in the ziplist
+* `zllen`: This is a 2 byte unsigned integer in little endian format. It represents the number of entries in this ziplist
+* `entry`: An entry represents an element in the ziplist. Details below
+* `zlend`: Always `255`. It represents the end of the ziplist.
 
-Each entry in the zip list has the following format :
+Each entry in the ziplist has the following format :
 
 ```
 <length-prev-entry><special-flag><raw-bytes-of-entry>
 ```
 
-`length-prev-entry`: This field stores the length of the previous entry, or 0 if this is the first entry. This allows easy traversal of the list in the reverse direction. This length is stored in either 1 byte or in 5 bytes. If the first byte is less than or equal to 253, it is considered as the length. If the first byte is 254, then the next 4 bytes are used to store the length. The 4 bytes are read as an unsigned integer.
+`length-prev-entry`: stores the length of the previous entry, or 0 if this is the first entry. This allows easy traversal of the list in the reverse direction. This length is stored in either 1 byte or in 5 bytes. If the first byte is less than or equal to 253, it is considered as the length. If the first byte is 254, then the next 4 bytes are used to store the length. The 4 bytes are read as an unsigned integer.
 
 `special-flag`: This flag indicates whether the entry is a string or an integer. It also indicates the length of the string, or the size of the integer.
-The various encodings of this flag are shown below :
+The various encodings of this flag are shown below:
 
-* `|00pppppp|` - 1 byte : String value with length less than or equal to 63 bytes (6 bits).
-* `|01pppppp|qqqqqqqq|` - 2 bytes : String value with length less than or equal to 16383 bytes (14 bits).
-* `|10______|qqqqqqqq|rrrrrrrr|ssssssss|tttttttt|` - 5 bytes : String value with length greater than or equal to 16384 bytes.
-* `|1100____|` - 1 byte : Integer encoded as 16 bit Integer (2 bytes).
-* `|1101____|` - 1 byte : Integer encoded as 32 bit Integer (4 bytes).
-* `|1110____|` - 1 byte : Integer encoded as 64 bit Integer (8 bytes).
+| Bytes | Length | Meaning |
+| ----- | ------ | ------- |
+| `00pppppp` | 1 byte | String value with length less than or equal to 63 bytes (6 bits) |
+| `01pppppp|qqqqqqqq` | 2 bytes | String value with length less than or equal to 16383 bytes (14 bits) |
+| `10______|<4 byte>` | 5 bytes | Next 4 byte contain an unsigned int. String value with length greater than or equal to 16384 bytes |
+| `1100____` | 1 byte | Integer encoded as 16 bit Integer (2 bytes) |
+| `1101____` | 1 byte | Integer encoded as 32 bit Integer (4 bytes) |
+| `1110____` | 1 byte | Integer encoded as 64 bit Integer (8 bytes) |
 
 `raw-byte`: After the special flag, the raw bytes of entry follow. The number of bytes was previously determined as part of the special flag.
 
-**Example 1**
+**Example:**
 
-`23 23 00 00 00 1E 00 00 00 04 00 00 E0 FF FF FF FF FF FF FF 7F 0A D0 FF FF 00 00 06 C0 FC 3F 04 C0 3F 00 FF ... `
+```
+23 23 00 00 00 1E 00 00 00 04 00 00 E0 FF FF FF FF FF
+FF FF 7F 0A D0 FF FF 00 00 06 C0 FC 3F 04 C0 3F 00 FF ...
+```
 
 * Start by decoding this using [String Encoding](#string-encoding). `23` is the length of the string (35 in decimal), therefore we will read the next 35 bytes till `ff`
 * Now, we are parsing the string starting at `23 00 00 ...` using [Ziplist encoding](#ziplist-encoding)
@@ -332,7 +352,7 @@ The various encodings of this flag are shown below :
 * Finally, we encounter `FF`, which tells us we have consumed all elements in this ziplist.
 * Thus, this ziplist stores the values `[0x7fffffffffffffff, 65535, 16380, 63]`
 
-## Intset Encoding
+### Intset Encoding
 
 An Intset is a binary search tree of integers. The binary tree is implemented in an array of integers. An intset is used when all the elements of the set are integers. An Intset has support for up to 64 bit integers. As an optimization, if the integers can be represented in fewer bytes, the array of integers will be constructed from 16 bit or 32 bit integers. When a new element is inserted, the implementation takes care to upgrade if necessary.
 
@@ -364,9 +384,9 @@ Within this string, the Intset has a very simple layout :
 * From now on, we read in groups of 4 bytes, and convert it into a unsigned integer
 * Thus, our intset looks like `[0x0000FFFC, 0x0000FFFD, 0x0000FFFE]`. Notice that the integers are in little endian format i.e. least significant bit came first.
 
-## Sorted Set in Ziplist Encoding
+### Sorted Set in Ziplist Encoding
 
-A sorted list in ziplist encoding is stored just like the Ziplist described above. Each element in the sorted set is followed by its score in the ziplist.
+A sorted set in ziplist encoding is stored just like the [Ziplist](#ziplist-encoding) described above. Each element in the sorted set is followed by its score in the ziplist.
 
 **Example**
 
@@ -374,11 +394,11 @@ A sorted list in ziplist encoding is stored just like the Ziplist described abov
 
 As you see, the scores follow each element.
 
-## Hashmap in Ziplist Encoding
+### Hashmap in Ziplist Encoding
 
 In this, key=value pairs of a hashmap are stored as successive entries in a ziplist.
 
-Note: This was introduced in RDB version 4. This deprecates zipmap encoding that was used in earlier versions.
+Note: This was introduced in RDB version 4. This deprecates the [zipmap encoding](#zipmap-encoding) that was used in earlier versions.
 
 **Example**
 
@@ -388,16 +408,16 @@ is stored in a ziplist as :
 
 `["us", "washington", "india", "delhi"]`
 
-## Quicklist Encoding
+### Quicklist Encoding
 
-RDB Version 7 introduced a new variant of list encoding: The quicklist.
+RDB Version 7 introduced a new variant of list encoding: Quicklist.
 
 Quicklist is a linked list of ziplists. Quicklist combines the memory efficiency of small ziplists with the extensibility of a linked list allowing us to create space-efficient lists of any length.
 
 To parse a quicklist, first a string is read from the stream using [String Encoding](#string-encoding).
 The contents of this string represent the ziplist.
 
-The structure of a quicklist within this string is as follows -
+The structure of a quicklist within this string is as follows:
 
 ```
 <len><ziplist><ziplist>...
@@ -413,6 +433,8 @@ A complete list needs to be constructed from all elements of all ziplists.
 ```
 01 00 0e 09 71 75 ...
 ```
+
+*TODO: proper example*
 
 
 ## CRC64 Checksum
