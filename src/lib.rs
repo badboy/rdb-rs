@@ -47,6 +47,7 @@ mod types {
     pub const SET_INTSET : u8 = 11;
     pub const ZSET_ZIPLIST : u8 = 12;
     pub const HASH_ZIPLIST : u8 = 13;
+    pub const LIST_QUICKLIST : u8 = 14;
 }
 
 mod encoding {
@@ -404,6 +405,9 @@ fn read_type<R: Reader>(value_type: u8, input: &mut R) -> DataType {
         },
         types::HASH_ZIPLIST => {
             DataType::ListOfTypes(read_list_ziplist(input))
+        },
+        types::LIST_QUICKLIST => {
+            panic!("Quicklist not yet implemented");
         },
         _ => { panic!("Value Type not implemented: {}", value_type) }
     }
