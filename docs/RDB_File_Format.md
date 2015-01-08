@@ -39,7 +39,7 @@ FF                          ## End of RDB file indicator
 8 byte checksum             ## CRC 32 checksum of the entire file.
 ```
 
-### Magic Number<a name="magic-number"></a>
+## Magic Number<a name="magic-number"></a>
 
 The file starts off with the magic string "REDIS". This is a quick sanity check to know we are dealing with a redis rdb file.
 
@@ -47,7 +47,7 @@ The file starts off with the magic string "REDIS". This is a quick sanity check 
 52 45 44 49 53  # "REDIS"
 ```
 
-### RDB Version Number<a name="version-number"></a>
+## RDB Version Number<a name="version-number"></a>
 
 The next 4 bytes store the version number of the rdb format. The 4 bytes are interpreted as ASCII characters and then converted to an integer using string to integer conversion.
 
@@ -55,13 +55,13 @@ The next 4 bytes store the version number of the rdb format. The 4 bytes are int
 30 30 30 33 # "0003" => Version 3
 ```
 
-### Database Selector<a name="database-selector"></a>
+## Database Selector<a name="database-selector"></a>
 
 A Redis instance can have multiple databases.
 
 A single byte `0xFE` flags the start of the database selector. After this byte, a variable length field indicates the database number. See the section [Length Encoding](#length-encoding) to understand how to read this database number.
 
-### Key Value Pairs<a name="key-value-pairs"></a>
+## Key Value Pairs<a name="key-value-pairs"></a>
 
 After the database selector, the file contains a sequence of key value pairs.
 
@@ -72,7 +72,7 @@ Each key value pair has 4 parts -
 * The key, encoded as a Redis String. See [String Encoding](#string-encoding).
 * The value, encoded according to the value type. See [Value Encoding](#value-encoding).
 
-#### Key Expiry Timestamp<a name="expire-timestamp"></a>
+### Key Expiry Timestamp<a name="expire-timestamp"></a>
 
 This section starts with a one byte flag.
 This flag is either:
@@ -80,11 +80,9 @@ This flag is either:
 * `0xFD`: The following expire value is specified in seconds. The following 4 bytes represent the Unix timestamp as an unsigned integer.
 * `0xFC`: The following expire value is specified in milliseconds. The following 8 bytes represent the Unix timestamp as an unsigned long.
 
-**TODO**: See the section "Redis Length Encoding" on how this number is encoded.
-
 During the import process, keys that have expired must be discarded.
 
-#### Value Type
+### Value Type<a name="value-type"></a>
 
 A one byte flag indicates encoding used to save the Value.
 
@@ -100,17 +98,13 @@ A one byte flag indicates encoding used to save the Value.
 * `13` = [Hashmap in Ziplist Encoding](#ziplist-encoding-hash) (Introduced in RDB version 4)
 * `14` = [List in Quicklist encoding](#quicklist-encoding) (Introduced in RDB version 7)
 
-### Key
+### Key<a name="key"></a>
 
 The key is simply encoded as a Redis string. See the section [String Encoding](#string-encoding) to learn how the key is encoded.
 
-### Value
+### Value<a name="value"></a>
 
-The encoding of the value depends on the value type flag.
-
-* 0: The value is a simple string.
-* 9, 10, 11, 12: the value is wrapped in a string. After reading the string, it must be parsed further.
-* 1, 2, 3 or 4: the value is a sequence of strings. This sequence of strings is used to construct a list, set, sorted set or hashmap.
+The value is parsed according to the previously read [Value Type](#value-type)
 
 ## Length Encoding<a name="length-encoding"></a>
 
