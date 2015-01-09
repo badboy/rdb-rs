@@ -189,9 +189,16 @@ fn read_sorted_set<R: Reader>(input: &mut R) -> Vec<(f64,Vec<u8>)> {
     while set_items > 0 {
         let val = read_blob(input);
         let score_length = input.read_byte().unwrap();
-        let score = input.read_exact(score_length as uint).unwrap();
-        let score = unsafe{str::from_utf8_unchecked(score[])}.
-            parse::<f64>().unwrap();
+        let score = match score_length {
+            253 => { std::f64::NAN },
+            254 => { std::f64::INFINITY },
+            255 => { std::f64::NEG_INFINITY },
+            _ => {
+                let tmp = input.read_exact(score_length as uint).unwrap();
+                unsafe{str::from_utf8_unchecked(tmp[])}.
+                    parse::<f64>().unwrap()
+            }
+        };
 
         set.push((score, val));
 
