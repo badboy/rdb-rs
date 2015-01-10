@@ -7,7 +7,8 @@ pub trait RdbParseFormatter {
     fn start_database(&mut self, db_index: u32) {}
     fn end_database(&mut self, db_index: u32) {}
 
-    fn aux_field(&mut self, _key: &[u8], _value: &[u8]) {}
+    fn resizedb(&mut self, db_size: u32, expires_size: u32) {}
+    fn aux_field(&mut self, key: &[u8], value: &[u8]) {}
 
     fn set(&mut self, key: &[u8], value: &[u8], expiry: Option<u64>) {}
 

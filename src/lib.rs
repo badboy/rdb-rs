@@ -201,8 +201,8 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
                 op_codes::RESIZEDB => {
                     let db_size = read_length(&mut self.input);
                     let expires_size = read_length(&mut self.input);
-                    println!("DB Size: {}, Expires Size: {}",
-                             db_size, expires_size);
+
+                    self.formatter.resizedb(db_size, expires_size);
                 },
                 op_codes::AUX => {
                     let auxkey = read_blob(&mut self.input);
