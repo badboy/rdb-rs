@@ -359,11 +359,24 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
         let zllen = reader.read_le_u16().unwrap();
         let mut list = Vec::with_capacity(zllen as usize);
 
+        self.formatter.start_list(key, zllen as u32, None, None);
+
         for _ in range(0, zllen) {
-            list.push(self.read_ziplist_entry(&mut reader));
+            let entry = self.read_ziplist_entry(&mut reader);
+            match entry {
+                DataType::String(ref val) => {
+                    self.formatter.list_element(key, val.as_slice());
+                },
+                DataType::Number(val) => {
+                    self.formatter.list_element(key, val.to_string().as_bytes());
+                },
+                _ => unreachable!()
+            }
+            list.push(entry);
         }
 
         assert!(reader.read_byte().unwrap() == 0xFF);
+        self.formatter.end_list(key);
 
         list
     }
@@ -426,7 +439,7 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
         hash
     }
 
-    fn read_set_intset(&mut self) -> Vec<i64> {
+    fn read_set_intset(&mut self, key: &[u8]) -> Vec<i64> {
         let mut set = vec![];
 
         let intset = read_blob(&mut self.input);
@@ -434,6 +447,8 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
         let mut reader = MemReader::new(intset);
         let byte_size = reader.read_le_u32().unwrap();
         let intset_length = reader.read_le_u32().unwrap();
+
+        self.formatter.start_set(key, intset_length, None, None);
 
         for _ in range(0, intset_length) {
             let val = match byte_size {
@@ -443,9 +458,11 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
                 _ => panic!("unhandled byte size in intset: {}", byte_size)
             };
 
+            self.formatter.set_element(key, val.to_string().as_bytes());
             set.push(val);
         }
 
+        self.formatter.end_set(key);
         set
     }
 
@@ -454,13 +471,13 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
 
         let mut list = vec![];
         for _ in range(0, len) {
-            let zl = self.read_list_ziplist();
-            list.push_all(zl.as_slice());
+            //let zl = self.read_list_ziplist();
+            //list.push_all(zl.as_slice());
         }
         list
     }
 
-    fn read_type(&mut self, value_type: u8) -> DataType {
+    fn read_type(&mut self, key: &[u8], value_type: u8) -> DataType {
         match value_type {
             types::STRING => {
                 DataType::String(read_blob(&mut self.input))
@@ -481,19 +498,24 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
                 DataType::Hash(self.read_hash_zipmap())
             },
             types::LIST_ZIPLIST => {
-                DataType::ListOfTypes(self.read_list_ziplist())
+                self.read_list_ziplist(key);
+                DataType::ListOfTypes(vec![])
             },
             types::SET_INTSET => {
-                DataType::Intset(self.read_set_intset())
+                self.read_set_intset(key);
+                DataType::Intset(vec![])
             },
             types::ZSET_ZIPLIST => {
-                DataType::SortedSetOfTypes(self.read_list_ziplist())
+                self.read_list_ziplist(key);
+                DataType::SortedSetOfTypes(vec![])
             },
             types::HASH_ZIPLIST => {
-                DataType::ListOfTypes(self.read_list_ziplist())
+                self.read_list_ziplist(key);
+                DataType::ListOfTypes(vec![])
             },
             types::LIST_QUICKLIST => {
-                DataType::ListOfTypes(self.read_quicklist())
+                //DataType::ListOfTypes(self.read_quicklist())
+                DataType::List(vec![])
             },
             _ => { panic!("Value Type not implemented: {}", value_type) }
         }
