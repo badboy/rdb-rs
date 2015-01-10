@@ -214,13 +214,13 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
                 _ => {
                     let key = read_blob(&mut self.input);
 
-                    match self.read_type(next_op) {
+                    match self.read_type(key.as_slice(), next_op) {
                         DataType::String(t) => {
                             self.formatter.set(key, t, None);
                         },
                         DataType::Number(t) => { println!("{}", t) },
                         DataType::ListOfTypes(_t) => { println!("ListOfTypes follows") },
-                        DataType::Intset(_t) => { println!("Intset follows") },
+                        DataType::Intset(_t) => { },
                         DataType::Hash(t) => {
                             for val in t.iter() {
                                 let _ = out.write(val.as_slice());
@@ -349,7 +349,7 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
         DataType::String(rawval)
     }
 
-    fn read_list_ziplist(&mut self) -> Vec<DataType> {
+    fn read_list_ziplist(&mut self, key: &[u8]) -> Vec<DataType> {
         let ziplist = read_blob(&mut self.input);
 
         let mut reader = MemReader::new(ziplist);

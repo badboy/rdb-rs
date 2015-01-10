@@ -16,14 +16,14 @@ pub trait RdbParseFormatter {
     fn hash_element(&mut self, key: Vec<u8>, field: Vec<u8>, value: Vec<u8>) {}
 
 
-    fn start_set(&mut self, key: Vec<u8>, cardinality: u32, expiry: Option<u32>, info: Option<()>) {}
-    fn end_set(&mut self, key: Vec<u8>) {}
-    fn set_element(&mut self, key: Vec<u8>, member: Vec<u8>) {}
+    fn start_set(&mut self, key: &[u8], cardinality: u32, expiry: Option<u32>, info: Option<()>) {}
+    fn end_set(&mut self, key: &[u8]) {}
+    fn set_element(&mut self, key: &[u8], member: &[u8]) {}
 
 
-    fn start_list(&mut self, key: Vec<u8>, length: u32, expiry: Option<u32>, info: Option<()>) {}
-    fn end_list(&mut self, key: Vec<u8>) {}
-    fn list_element(&mut self, key: Vec<u8>, value: Vec<u8>) {}
+    fn start_list(&mut self, key: &[u8], length: u32, expiry: Option<u32>, info: Option<()>) {}
+    fn end_list(&mut self, key: &[u8]) {}
+    fn list_element(&mut self, key: &[u8], value: &[u8]) {}
 
     fn start_sorted_set(&mut self, key: Vec<u8>, length: u32, expiry: Option<u32>, info: Option<()>) {}
     fn end_sorted_set(&mut self, key: Vec<u8>) {}

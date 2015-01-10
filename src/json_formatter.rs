@@ -1,5 +1,4 @@
 #![allow(unused_must_use)]
-#![allow(unused_variables)]
 
 use formatter::RdbParseFormatter;
 use std::io;
@@ -54,6 +53,17 @@ impl JSONFormatter {
         }
         self.element_index += 1;
     }
+
+    fn write_key(&mut self, key: &[u8]) {
+        self.out.write_str("\"");
+        self.out.write(key);
+        self.out.write_str("\"");
+    }
+    fn write_value(&mut self, value: &[u8]) {
+        self.out.write_str("\"");
+        self.out.write(value);
+        self.out.write_str("\"");
+    }
 }
 
 impl RdbParseFormatter for JSONFormatter {
@@ -65,7 +75,7 @@ impl RdbParseFormatter for JSONFormatter {
         if self.has_databases {
             self.out.write_str("}");
         }
-        self.out.write_str("]");
+        self.out.write_str("]\n");
     }
 
     fn start_database(&mut self, _db_number: u32) {
@@ -81,55 +91,76 @@ impl RdbParseFormatter for JSONFormatter {
 
     fn set(&mut self, key: Vec<u8>, value: Vec<u8>, __expiry: Option<u32>) {
         self.start_key(0);
-        self.out.write_str("\"");
-        self.out.write(encode_key(key).as_slice());
-        self.out.write_str("\":\"");
-        self.out.write(encode_key(value).as_slice());
-        self.out.write_str("\"");
+        self.write_key(key.as_slice());
+        self.out.write_str(":");
+        self.write_key(value.as_slice());
     }
 
     fn start_hash(&mut self, key: Vec<u8>, length: u32,
-                  _expiry: Option<u32>, _info: Option<()>) {}
-    fn end_hash(&mut self, key: Vec<u8>) {}
-    fn hash_element(&mut self, key: Vec<u8>, field: Vec<u8>, value: Vec<u8>) {}
+                  _expiry: Option<u32>, _info: Option<()>) {
+        self.start_key(length);
+        self.write_key(key.as_slice());
+        self.out.write_str(":{");
+    }
+    fn end_hash(&mut self, _key: Vec<u8>) {
+        self.end_key();
+        self.out.write_str("}");
+    }
+    fn hash_element(&mut self, _key: Vec<u8>, field: Vec<u8>, value: Vec<u8>) {
+        self.write_comma();
+        self.write_key(field.as_slice());
+        self.write_value(value.as_slice());
+    }
 
 
-    fn start_set(&mut self, key: Vec<u8>, cardinality: u32,
+    fn start_set(&mut self, key: &[u8], cardinality: u32,
                  _expiry: Option<u32>, _info: Option<()>) {
         self.start_key(cardinality);
-        self.out.write_str("\"");
-        self.out.write(encode_key(key).as_slice());
-        self.out.write_str("\":[");
+        self.write_key(key);
+        self.out.write_str(":[");
+        self.out.flush();
     }
-    fn end_set(&mut self, key: Vec<u8>) {
+    fn end_set(&mut self, _key: &[u8]) {
         self.end_key();
         self.out.write_str("]");
     }
-    fn set_element(&mut self, key: Vec<u8>, member: Vec<u8>) {
+    fn set_element(&mut self, _key: &[u8], member: &[u8]) {
         self.write_comma();
-        self.out.write(encode_value(key).as_slice());
+        self.write_value(member.as_slice());
     }
 
 
-    fn start_list(&mut self, key: Vec<u8>, length: u32,
-                  _expiry: Option<u32>, _info: Option<()>) {}
-    fn end_list(&mut self, key: Vec<u8>) {}
-    fn list_element(&mut self, key: Vec<u8>, value: Vec<u8>) {}
+    fn start_list(&mut self, key: &[u8], length: u32,
+                  _expiry: Option<u32>, _info: Option<()>) {
+        self.start_key(length);
+        self.write_key(key.as_slice());
+        self.out.write_str(":[");
+    }
+    fn end_list(&mut self, _key: &[u8]) {
+        self.end_key();
+        self.out.write_str("]");
+    }
+    fn list_element(&mut self, _key: &[u8], value: &[u8]) {
+        self.write_comma();
+        self.write_value(value.as_slice());
+    }
 
     fn start_sorted_set(&mut self, key: Vec<u8>, length: u32,
-                        _expiry: Option<u32>, _info: Option<()>) {}
-    fn end_sorted_set(&mut self, key: Vec<u8>) {}
-    fn sorted_set_element(&mut self, key: Vec<u8>,
+                        _expiry: Option<u32>, _info: Option<()>) {
+        self.start_key(length);
+        self.write_key(key.as_slice());
+        self.out.write_str(":{");
+    }
+    fn end_sorted_set(&mut self, _key: Vec<u8>) {
+        self.end_key();
+        self.out.write_str("}");
+    }
+    fn sorted_set_element(&mut self, _key: Vec<u8>,
                           score: f64, member: Vec<u8>) {
-
+        self.write_comma();
+        self.write_key(member.as_slice());
+        self.out.write_str(":");
+        self.out.write_str(score.to_string().as_slice());
     }
 
-    //fn aux_field(&mut self, key: Vec<u8>, value: Vec<u8>) {
-        //let _ = self.out.write_str("[aux] ");
-        //let _ = self.out.write(key.as_slice());
-        //let _ = self.out.write_str(": ");
-        //let _ = self.out.write(value.as_slice());
-        //let _ = self.out.write_str("\n");
-        //let _ = self.out.flush();
-    //}
 }
