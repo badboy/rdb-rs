@@ -5,7 +5,6 @@ extern crate lzf;
 use std::str;
 use lzf::decompress;
 use std::io::MemReader;
-use std::io;
 use formatter::RdbParseFormatter;
 
 pub use nil_formatter::NilFormatter;
@@ -173,7 +172,6 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
 
         self.formatter.start_rdb();
 
-        let mut out = io::stdout();
         let mut last_database : u32 = 0;
         loop {
             let next_op = self.input.read_byte().unwrap();
@@ -188,7 +186,7 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
                     self.formatter.end_rdb();
 
                     let checksum = self.input.read_to_end().unwrap();
-                    self.formatter.checksum(checksum);
+                    self.formatter.checksum(checksum.as_slice());
                     break ;
                 },
                 op_codes::EXPIRETIME_MS => {
@@ -209,26 +207,14 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
                     let auxkey = read_blob(&mut self.input);
                     let auxval = read_blob(&mut self.input);
 
-                    self.formatter.aux_field(auxkey, auxval);
+                    self.formatter.aux_field(
+                        auxkey.as_slice(),
+                        auxval.as_slice());
                 },
                 _ => {
                     let key = read_blob(&mut self.input);
 
                     match self.read_type(key.as_slice(), next_op) {
-                        DataType::String(t) => {
-                            self.formatter.set(key, t, None);
-                        },
-                        DataType::Number(t) => { println!("{}", t) },
-                        DataType::ListOfTypes(_t) => { println!("ListOfTypes follows") },
-                        DataType::Intset(_t) => { },
-                        DataType::Hash(t) => {
-                            for val in t.iter() {
-                                let _ = out.write(val.as_slice());
-                                let _ = out.write_str(", ");
-                            }
-                            let _ = out.write_str("\n");
-                        },
-                        DataType::HashOfTypes(_t) => { println!("Hash follows") },
                         _ => {}
                     }
                 }
@@ -237,22 +223,29 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
         }
     }
 
-    fn read_linked_list(&mut self) -> Vec<Vec<u8>> {
+    fn read_linked_list(&mut self, key: &[u8]) -> Vec<Vec<u8>> {
         let mut len = read_length(&mut self.input);
         let mut list = vec![];
 
+        self.formatter.start_list(key, len, None, None);
+
         while len > 0 {
             let blob = read_blob(&mut self.input);
+            self.formatter.list_element(key, blob.as_slice());
             list.push(blob);
             len -= 1;
         }
 
+        self.formatter.end_list(key);
+
         list
     }
 
-    fn read_sorted_set(&mut self) -> Vec<(f64,Vec<u8>)> {
+    fn read_sorted_set(&mut self, key: &[u8]) -> Vec<(f64,Vec<u8>)> {
         let mut set = vec![];
         let mut set_items = read_length(&mut self.input);
+
+        self.formatter.start_sorted_set(key, set_items, None, None);
 
         while set_items > 0 {
             let val = read_blob(&mut self.input);
@@ -268,25 +261,36 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
                 }
             };
 
+            self.formatter.sorted_set_element(key, score, val.as_slice());
             set.push((score, val));
 
             set_items -= 1;
         }
 
+        self.formatter.end_sorted_set(key);
+
         set
     }
 
-    fn read_hash(&mut self) -> Vec<Vec<u8>> {
+    fn read_hash(&mut self, key: &[u8]) -> Vec<Vec<u8>> {
         let mut hash = vec![];
         let mut hash_items = read_length(&mut self.input);
-        hash_items = 2*hash_items;
+
+        self.formatter.start_hash(key, hash_items, None, None);
 
         while hash_items > 0 {
+            let field = read_blob(&mut self.input);
             let val = read_blob(&mut self.input);
+
+            self.formatter.hash_element(key, field.as_slice(), val.as_slice());
+
+            hash.push(field);
             hash.push(val);
 
             hash_items -= 1;
         }
+
+        self.formatter.end_hash(key);
 
         hash
     }
@@ -466,56 +470,55 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
         set
     }
 
-    fn read_quicklist(&mut self) -> Vec<DataType> {
+    fn read_quicklist(&mut self, key: &[u8]) -> Vec<DataType> {
         let len = read_length(&mut self.input);
 
+        self.formatter.start_set(key, 0, None, None);
         let mut list = vec![];
         for _ in range(0, len) {
-            //let zl = self.read_list_ziplist();
-            //list.push_all(zl.as_slice());
+            let zl = self.read_list_ziplist(key);
+            list.push_all(zl.as_slice());
         }
+        self.formatter.end_set(key);
         list
     }
 
     fn read_type(&mut self, key: &[u8], value_type: u8) -> DataType {
         match value_type {
             types::STRING => {
-                DataType::String(read_blob(&mut self.input))
+                let val = read_blob(&mut self.input);
+                self.formatter.set(key, val.as_slice(), None);
+                DataType::String(val)
             },
             types::LIST => {
-                DataType::List(self.read_linked_list())
+                DataType::List(self.read_linked_list(key))
             },
             types::SET => {
-                DataType::Set(self.read_linked_list())
+                DataType::Set(self.read_linked_list(key))
             },
             types::ZSET => {
-                DataType::SortedSet(self.read_sorted_set())
+                DataType::SortedSet(self.read_sorted_set(key))
             },
             types::HASH => {
-                DataType::Hash(self.read_hash())
+                DataType::Hash(self.read_hash(key))
             },
             types::HASH_ZIPMAP => {
                 DataType::Hash(self.read_hash_zipmap())
             },
             types::LIST_ZIPLIST => {
-                self.read_list_ziplist(key);
-                DataType::ListOfTypes(vec![])
+                DataType::ListOfTypes(self.read_list_ziplist(key))
             },
             types::SET_INTSET => {
-                self.read_set_intset(key);
-                DataType::Intset(vec![])
+                DataType::Intset(self.read_set_intset(key))
             },
             types::ZSET_ZIPLIST => {
-                self.read_list_ziplist(key);
-                DataType::SortedSetOfTypes(vec![])
+                DataType::SortedSetOfTypes(self.read_list_ziplist(key))
             },
             types::HASH_ZIPLIST => {
-                self.read_list_ziplist(key);
-                DataType::ListOfTypes(vec![])
+                DataType::ListOfTypes(self.read_list_ziplist(key))
             },
             types::LIST_QUICKLIST => {
-                //DataType::ListOfTypes(self.read_quicklist())
-                DataType::List(vec![])
+                DataType::ListOfTypes(self.read_quicklist(key))
             },
             _ => { panic!("Value Type not implemented: {}", value_type) }
         }
