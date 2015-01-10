@@ -225,7 +225,21 @@ Sets are encoded exactly like lists.
 ### Sorted Set Encoding
 
 * First, the size of the sorted set `size` is read from the stream using [Length Encoding](#length-encoding)
-* **TODO**
+* Next, `size` pairs of the value and its score are read from the stream.
+* The value is [string encoded](#string-encoding)
+* The next byte specifies the length of the encoded score (as an unsigned integer). This byte has 3 special meanings:
+    * `253`: not a number. Don't read additional bytes
+    * `254`: positive infinity. Don't read additional bytes
+    * `255`: negative infinity. Don't read additional bytes
+* Read that many bytes from the stream, representing the score as an ASCII-encoded float. Use String-to-float conversion to get the actual double value.
+
+*Note: Depending on the value you may loose precision. Redis saves the score as a double*
+
+**Example:**
+
+```
+02
+```
 
 ### Hash Encoding
 
