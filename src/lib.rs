@@ -8,11 +8,13 @@ use std::io::MemReader;
 use std::io;
 use formatter::RdbParseFormatter;
 
+pub use nil_formatter::NilFormatter;
 pub use plain_formatter::PlainFormatter;
 
 mod helper;
 
 pub mod formatter;
+pub mod nil_formatter;
 pub mod plain_formatter;
 
 
@@ -73,102 +75,116 @@ pub enum DataType {
     Unknown
 }
 
+pub struct RdbParser<R: Reader, F: RdbParseFormatter> {
+    input: R,
+    formatter: F
+}
 
-pub fn parse<R: Reader, F: RdbParseFormatter>(input: &mut R, formatter: &mut F) {
-    assert!(verify_magic(input));
-    assert!(verify_version(input));
 
-    formatter.start_rdb();
+pub fn parse<R: Reader, F: RdbParseFormatter>(input: R, formatter: F) {
+    let mut parser = RdbParser::new(input, formatter);
+    parser.parse()
+}
 
-    let mut out = io::stdout();
-    let mut last_database : u32 = 0;
-    loop {
-        let next_op = input.read_byte().unwrap();
-
-        match next_op {
-            op_codes::SELECTDB => {
-                last_database = read_length(input);
-                formatter.start_database(last_database);
-            },
-            op_codes::EOF => {
-                formatter.end_database(last_database);
-                formatter.end_rdb();
-
-                let checksum = input.read_to_end().unwrap();
-                formatter.checksum(checksum);
-                break ;
-            },
-            op_codes::EXPIRETIME_MS => {
-                let expiretime_ms = input.read_le_u64().unwrap();
-                println!("EXPIRETIME_MS: {}", expiretime_ms);
-            },
-            op_codes::EXPIRETIME => {
-                let expiretime = input.read_be_u32().unwrap();
-                println!("EXPIRETIME: {}", expiretime);
-            },
-            op_codes::RESIZEDB => {
-                let db_size = read_length(input);
-                let expires_size = read_length(input);
-                println!("DB Size: {}, Expires Size: {}",
-                         db_size, expires_size);
-            },
-            op_codes::AUX => {
-                let auxkey = read_blob(input);
-                let auxval = read_blob(input);
-
-                formatter.aux_field(auxkey, auxval);
-            },
-            _ => {
-                let key = read_blob(input);
-
-                match read_type(next_op, input) {
-                    DataType::String(t) => {
-                        formatter.set(key, t);
-                    },
-                    DataType::Number(t) => { println!("{}", t) },
-                    DataType::ListOfTypes(_t) => { println!("ListOfTypes follows") },
-                    DataType::Intset(_t) => { println!("Intset follows") },
-                    DataType::Hash(t) => {
-                        for val in t.iter() {
-                            let _ = out.write(val.as_slice());
-                            let _ = out.write_str(", ");
-                        }
-                        let _ = out.write_str("\n");
-                    },
-                    DataType::HashOfTypes(_t) => { println!("Hash follows") },
-                    _ => {}
-                }
-            }
-        }
-
+impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
+    pub fn new(input: R, formatter: F) -> RdbParser<R, F> {
+        RdbParser{input: input, formatter: formatter}
     }
 
-    return;
+    pub fn parse(&mut self) {
+        assert!(self.verify_magic());
+        assert!(self.verify_version());
 
+        self.formatter.start_rdb();
+
+        let mut out = io::stdout();
+        let mut last_database : u32 = 0;
+        loop {
+            let next_op = self.input.read_byte().unwrap();
+
+            match next_op {
+                op_codes::SELECTDB => {
+                    last_database = read_length(&mut self.input);
+                    self.formatter.start_database(last_database);
+                },
+                op_codes::EOF => {
+                    self.formatter.end_database(last_database);
+                    self.formatter.end_rdb();
+
+                    let checksum = self.input.read_to_end().unwrap();
+                    self.formatter.checksum(checksum);
+                    break ;
+                },
+                op_codes::EXPIRETIME_MS => {
+                    let expiretime_ms = self.input.read_le_u64().unwrap();
+                    println!("EXPIRETIME_MS: {}", expiretime_ms);
+                },
+                op_codes::EXPIRETIME => {
+                    let expiretime = self.input.read_be_u32().unwrap();
+                    println!("EXPIRETIME: {}", expiretime);
+                },
+                op_codes::RESIZEDB => {
+                    let db_size = read_length(&mut self.input);
+                    let expires_size = read_length(&mut self.input);
+                    println!("DB Size: {}, Expires Size: {}",
+                             db_size, expires_size);
+                },
+                op_codes::AUX => {
+                    let auxkey = read_blob(&mut self.input);
+                    let auxval = read_blob(&mut self.input);
+
+                    self.formatter.aux_field(auxkey, auxval);
+                },
+                _ => {
+                    let key = read_blob(&mut self.input);
+
+                    match read_type(next_op, &mut self.input) {
+                        DataType::String(t) => {
+                            self.formatter.set(key, t, None);
+                        },
+                        DataType::Number(t) => { println!("{}", t) },
+                        DataType::ListOfTypes(_t) => { println!("ListOfTypes follows") },
+                        DataType::Intset(_t) => { println!("Intset follows") },
+                        DataType::Hash(t) => {
+                            for val in t.iter() {
+                                let _ = out.write(val.as_slice());
+                                let _ = out.write_str(", ");
+                            }
+                            let _ = out.write_str("\n");
+                        },
+                        DataType::HashOfTypes(_t) => { println!("Hash follows") },
+                        _ => {}
+                    }
+                }
+            }
+
+        }
+    }
+
+    pub fn verify_magic(&mut self) -> bool {
+        let magic = self.input.read_exact(5).unwrap();
+
+        // Meeeeeh.
+        magic[0] == constants::RDB_MAGIC.as_bytes()[0] &&
+            magic[1] == constants::RDB_MAGIC.as_bytes()[1] &&
+            magic[2] == constants::RDB_MAGIC.as_bytes()[2] &&
+            magic[3] == constants::RDB_MAGIC.as_bytes()[3] &&
+            magic[4] == constants::RDB_MAGIC.as_bytes()[4]
+    }
+
+    pub fn verify_version(&mut self) -> bool {
+        let version = self.input.read_exact(4).unwrap();
+
+        let version = (version[0]-48) as u32 * 1000 +
+            (version[1]-48) as u32 * 100 +
+            (version[2]-48) as u32 * 10 +
+            (version[3]-48) as u32;
+
+        version >= version::SUPPORTED_MINIMUM &&
+            version <= version::SUPPORTED_MAXIMUM
+    }
 }
 
-pub fn verify_magic<R: Reader>(input: &mut R) -> bool {
-    let magic = input.read_exact(5).unwrap();
-
-    // Meeeeeh.
-    magic[0] == constants::RDB_MAGIC.as_bytes()[0] &&
-        magic[1] == constants::RDB_MAGIC.as_bytes()[1] &&
-        magic[2] == constants::RDB_MAGIC.as_bytes()[2] &&
-        magic[3] == constants::RDB_MAGIC.as_bytes()[3] &&
-        magic[4] == constants::RDB_MAGIC.as_bytes()[4]
-}
-
-pub fn verify_version<R: Reader>(input: &mut R) -> bool {
-    let version = input.read_exact(4).unwrap();
-
-    let version = (version[0]-48) as u32 * 1000 +
-        (version[1]-48) as u32 * 100 +
-        (version[2]-48) as u32 * 10 +
-        (version[3]-48) as u32;
-
-    version >= version::SUPPORTED_MINIMUM &&
-        version <= version::SUPPORTED_MAXIMUM
-}
 
 fn read_linked_list<R: Reader>(input: &mut R) -> Vec<Vec<u8>> {
     let mut len = read_length(input);

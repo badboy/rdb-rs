@@ -1,4 +1,3 @@
-#![feature(globs)]
 extern crate rdb;
 use rdb::*;
 use std::io::MemReader;
@@ -40,22 +39,26 @@ fn test_read_blob() {
 
 #[test]
 fn test_verify_version() {
+    let mut parser = RdbParser::new(MemReader::new(vec![0x30, 0x30, 0x30, 0x33]), NilFormatter);
     assert_eq!(
         true,
-        verify_version(&mut MemReader::new(vec!(0x30, 0x30, 0x30, 0x33))));
+        parser.verify_version());
 
+    let mut parser = RdbParser::new(MemReader::new(vec![0x30, 0x30, 0x30, 0x3a]), NilFormatter);
     assert_eq!(
         false,
-        verify_version(&mut MemReader::new(vec!(0x30, 0x30, 0x30, 0x3a))));
+        parser.verify_version());
 }
 
 #[test]
 fn test_verify_magic() {
+    let mut parser = RdbParser::new(MemReader::new(vec![0x52, 0x45, 0x44, 0x49, 0x53]), NilFormatter);
     assert_eq!(
         true,
-        verify_magic(&mut MemReader::new(vec!(0x52, 0x45, 0x44, 0x49, 0x53))));
+        parser.verify_magic());
 
+    let mut parser = RdbParser::new(MemReader::new(vec![0x51, 0x0, 0x0, 0x0, 0x0]), NilFormatter);
     assert_eq!(
         false,
-        verify_magic(&mut MemReader::new(vec!(0x51, 0x0, 0x0, 0x0, 0x0))));
+        parser.verify_magic());
 }
