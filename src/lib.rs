@@ -10,12 +10,14 @@ use formatter::RdbParseFormatter;
 
 pub use nil_formatter::NilFormatter;
 pub use plain_formatter::PlainFormatter;
+pub use json_formatter::JSONFormatter;
 
 mod helper;
 
 pub mod formatter;
 pub mod nil_formatter;
 pub mod plain_formatter;
+pub mod json_formatter;
 
 
 mod version {
