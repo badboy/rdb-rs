@@ -338,8 +338,7 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
                         }
                     },
                     _ => {
-                        println!("Flag not handled: {}", flag);
-                        return DataType::Number(-42);
+                        panic!("Flag not handled: {}", flag);
                     }
 
                 }
