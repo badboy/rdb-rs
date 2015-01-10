@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+$for(author-meta)$
+  <meta name="author" content="$author-meta$" />
+$endfor$
+$if(date-meta)$
+  <meta name="date" content="$date-meta$" />
+$endif$
+  <title>$if(title-prefix)$$title-prefix$ - $endif$$pagetitle$</title>
+$if(quotes)$
+  <style type="text/css">q { quotes: "“" "”" "‘" "’"; }</style>
+$endif$
+$if(highlighting-css)$
+  <style type="text/css">
+$highlighting-css$
+  </style>
+$endif$
+$for(css)$
+  <link rel="stylesheet" href="$css$" $if(html5)$$else$type="text/css" $endif$/>
+$endfor$
+$if(math)$
+  $math$
+$endif$
+$for(header-includes)$
+  $header-includes$
+$endfor$
+</head>
+<body>
+$for(include-before)$
+$include-before$
+$endfor$
+$if(toc)$
+<div id="$idprefix$TOC">
+$if(title)$
+<h1 class="title">$title$</h1>
+$endif$
+$toc$
+</div>
+$endif$
+<div class="content">
+$body$
+</div>
+<div class="footer">
+Copyright © 2015 Jan-Erik Rediger, released under the MIT license |
+<a href="#TOC">to the TOC</a>
+</div>
+$for(include-after)$
+$include-after$
+$endfor$
+</body>
+</html>

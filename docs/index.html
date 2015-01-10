@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Redis RDB</title>
+    <link rel="stylesheet" href="style.css" type="text/css" />
+  </head>
+  <body>
+    <div id="TOC">
+      <h1 class="title">Redis RDB File Format</h1>
+      <ul>
+        <li><a href="file_format.html">File Format</a></li>
+        <li><a href="version_history.html">Version History</a></li>
+      </ul>
+    </div>
+    <div class="content">
+      <blockquote>
+        <a href="http://redis.io">Redis</a> is an open source, BSD licensed, advanced key-value cache and store. It is often referred to as a data structure server since keys can contain strings, hashes, lists, sets, sorted sets, bitmaps and hyperloglogs.
+      </blockquote>
+      <p>Redis’ RDB file is a binary representation of the in-memory store. This binary file is sufficient to completely restore Redis’ state.</p>
+      <p>Optimizing for fast read/writes means the on-disk format should be as close as possible to the in-memory representation. This is the approach taken by the RDB file. As a consequence, you cannot parse the RDB file without some understanding of Redis’ in-memory representation of data structures.</p>
+
+      <hr>
+      <p>
+        This documentation is largely based on 
+        <a href="https://github.com/sripathikrishnan/redis-rdb-tools/blob/d39c8e5127daf3e109c0f0e101af8ed0e5400493/docs/RDB_File_Format.textile">RDB_File_Format.textile</a>
+        and 
+        <a href="https://github.com/sripathikrishnan/redis-rdb-tools/blob/d39c8e5127daf3e109c0f0e101af8ed0e5400493/docs/RDB_Version_History.textile">RDB_Version_History.textile</a>
+      </p>
+      <p>Thanks to Sripathi Krishnan and his work on a the
+      <a href="https://github.com/sripathikrishnan/redis-rdb-tools">redis-rdb-tools</a>, a Python tool to parse, analyze and dump RDB files.</p>
+    </div>
+    <div class="footer">
+      Copyright © 2015 Jan-Erik Rediger, released under the MIT license |
+      <a href="#TOC">to the TOC</a>
+    </div>
+  </body>
+</html>

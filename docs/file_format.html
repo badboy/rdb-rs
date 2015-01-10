@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Redis RDB File Format</title>
+  <link rel="stylesheet" href="style.css" type="text/css" />
+</head>
+<body>
+<div id="TOC">
+<h1 class="title">Redis RDB File Format</h1>
+<ul>
+<li><a href="#high-level-algorithm-to-parse-rdb">High Level Algorithm to parse RDB</a></li>
+<li><a href="#magic-number">Magic Number</a></li>
+<li><a href="#rdb-version-number">RDB Version Number</a></li>
+<li><a href="#op-codes">Op Codes</a></li>
+<li><a href="#database-selector">Database Selector</a></li>
+<li><a href="#resizedb-information">Resizedb information</a></li>
+<li><a href="#auxiliary-fields">Auxiliary fields</a></li>
+<li><a href="#key-value-pairs">Key Value Pairs</a><ul>
+<li><a href="#key-expiry-timestamp">Key Expiry Timestamp</a></li>
+<li><a href="#value-type">Value Type</a></li>
+<li><a href="#key">Key</a></li>
+<li><a href="#value">Value</a></li>
+</ul></li>
+<li><a href="#encodings">Encodings</a><ul>
+<li><a href="#length-encoding">Length Encoding</a></li>
+<li><a href="#string-encoding">String Encoding</a></li>
+<li><a href="#list-encoding">List Encoding</a></li>
+<li><a href="#set-encoding">Set Encoding</a></li>
+<li><a href="#sorted-set-encoding">Sorted Set Encoding</a></li>
+<li><a href="#hash-encoding">Hash Encoding</a></li>
+<li><a href="#zipmap-encoding">Zipmap Encoding</a></li>
+<li><a href="#ziplist-encoding">Ziplist Encoding</a></li>
+<li><a href="#intset-encoding">Intset Encoding</a></li>
+<li><a href="#sorted-set-in-ziplist-encoding">Sorted Set in Ziplist Encoding</a></li>
+<li><a href="#hashmap-in-ziplist-encoding">Hashmap in Ziplist Encoding</a></li>
+<li><a href="#quicklist-encoding">Quicklist Encoding</a></li>
+</ul></li>
+<li><a href="#crc64-checksum">CRC64 Checksum</a></li>
+</ul>
+</div>
+<div class="content">
+<p>Redis’ RDB file is a binary representation of the in-memory store. This binary file is sufficient to completely restore Redis’ state.</p>
+<p>The RDB file format is optimized for fast read and writes. Where possible LZF compression is used to reduce the file size. In general, objects are prefixed with their lengths, so before reading the object you know exactly how much memory to allocate.</p>
+<p>Optimizing for fast read/writes means the on-disk format should be as close as possible to the in-memory representation. This is the approach taken by the RDB file. As a consequence, you cannot parse the RDB file without some understanding of Redis’ in-memory representation of data structures.</p>
+<h2 id="high-level-algorithm-to-parse-rdb">High Level Algorithm to parse RDB</h2>
+<p>At a high level, the RDB file has the following structure</p>
+<pre><code>----------------------------#
+52 45 44 49 53              # Magic String &quot;REDIS&quot;
+30 30 30 33                 # RDB Version Number as ASCII string. &quot;0003&quot; = 3
+----------------------------
+FA                          # Auxiliary field
+$string-encoded-key         # May contain arbitrary metadata
+$string-encoded-value       # such as Redis version, creation time, used memory, ...
+----------------------------
+FE 00                       # Indicates database selector. db number = 00
+FB                          # Indicates a resizedb field
+$length-encoded-int         # Size of the corresponding hash table
+$length-encoded-int         # Size of the corresponding expire hash table
+----------------------------# Key-Value pair starts
+FD $unsigned-int            # &quot;expiry time in seconds&quot;, followed by 4 byte unsigned int
+$value-type                 # 1 byte flag indicating the type of value
+$string-encoded-key         # The key, encoded as a redis string
+$encoded-value              # The value, encoding depends on $value-type
+----------------------------
+FC $unsigned long           # &quot;expiry time in ms&quot;, followed by 8 byte unsigned long
+$value-type                 # 1 byte flag indicating the type of value
+$string-encoded-key         # The key, encoded as a redis string
+$encoded-value              # The value, encoding depends on $value-type
+----------------------------
+$value-type                 # key-value pair without expiry
+$string-encoded-key
+$encoded-value
+----------------------------
+FE $length-encoding         # Previous db ends, next db starts.
+----------------------------
+...                         # Additional key-value pairs, databases, ...
+
+FF                          ## End of RDB file indicator
+8-byte-checksum             ## CRC64 checksum of the entire file.</code></pre>
+<h2 id="magic-number">Magic Number</h2>
+<p>The file starts off with the magic string “REDIS”. This is a quick sanity check to know we are dealing with a redis rdb file.</p>
+<pre><code>52 45 44 49 53  # &quot;REDIS&quot;</code></pre>
+<h2 id="rdb-version-number">RDB Version Number</h2>
+<p>The next 4 bytes store the version number of the rdb format. The 4 bytes are interpreted as ASCII characters and then converted to an integer using string to integer conversion.</p>
+<pre><code>30 30 30 33 # &quot;0003&quot; =&gt; Version 3</code></pre>
+<h2 id="op-codes">Op Codes</h2>
+<p>Each part after the initial header is introduced by a special op code. The available op codes are:</p>
+<table>
+<thead>
+<tr class="header">
+<th align="left">Byte</th>
+<th align="left">Name</th>
+<th align="left">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">0xFF</td>
+<td align="left">EOF</td>
+<td align="left">End of the RDB file</td>
+</tr>
+<tr class="even">
+<td align="left">0xFE</td>
+<td align="left">SELECTDB</td>
+<td align="left"><a href="#database-selector">Database Selector</a></td>
+</tr>
+<tr class="odd">
+<td align="left">0xFD</td>
+<td align="left">EXPIRETIME</td>
+<td align="left">Expire time in seconds, see <a href="#key-expiry-timestamp">Key Expiry Timestamp</a></td>
+</tr>
+<tr class="even">
+<td align="left">0xFC</td>
+<td align="left">EXPIRETIMEMS</td>
+<td align="left">Expire time in milliseconds, see <a href="#key-expiry-timestamp">Key Expiry Timestamp</a></td>
+</tr>
+<tr class="odd">
+<td align="left">0xFB</td>
+<td align="left">RESIZEDB</td>
+<td align="left">Hash table sizes for the main keyspace and expires, see <a href="#resizedb">Resizedb information</a></td>
+</tr>
+<tr class="even">
+<td align="left">0xFA</td>
+<td align="left">AUX</td>
+<td align="left">Auxiliary fields. Arbitrary key-value settings, see <a href="#aux-fields">Auxiliary fields</a></td>
+</tr>
+</tbody>
+</table>
+<h2 id="database-selector">Database Selector</h2>
+<p>A Redis instance can have multiple databases.</p>
+<p>A single byte <code>0xFE</code> flags the start of the database selector. After this byte, a variable length field indicates the database number. See the section <a href="#length-encoding">Length Encoding</a> to understand how to read this database number.</p>
+<h2 id="resizedb-information">Resizedb information</h2>
+<p>This op code was introduced in RDB version 7.</p>
+<p>It encodes two values to speed up RDB loading by avoiding additional resizes and rehashing. The op code is followed by two <a href="#length-encoded">length-encoded</a> integers indicating:</p>
+<ul>
+<li>Database hash table size</li>
+<li>Expiry hash table size</li>
+</ul>
+<h2 id="auxiliary-fields">Auxiliary fields</h2>
+<p>This op code was introduced in RDB version 7.</p>
+<p>The op code is followed by two <a href="#string-encoding">Redis Strings</a>, representing the key and value of a setting. Unknown fields should be ignored by a parser.</p>
+<p>Currently the following settings are implemented:</p>
+<ul>
+<li><code>redis-ver</code>: The Redis Version that wrote the RDB</li>
+<li><code>redis-bits</code>: Bit architecture of the system that wrote the RDB, either 32 or 64</li>
+<li><code>ctime</code>: Creation time of the RDB</li>
+<li><code>used-mem</code>: Used memory of the instance that wrote the RDB</li>
+</ul>
+<h2 id="key-value-pairs">Key Value Pairs</h2>
+<p>After the database selector, the file contains a sequence of key value pairs.</p>
+<p>Each key value pair has 4 parts:</p>
+<ul>
+<li>Key Expiry Timestamp. This is optional.</li>
+<li>1 byte flag indicating the value type.</li>
+<li>The key, encoded as a Redis String. See <a href="#string-encoding">String Encoding</a>.</li>
+<li>The value, encoded according to the value type. See <a href="#value-encoding">Value Encoding</a>.</li>
+</ul>
+<h3 id="key-expiry-timestamp">Key Expiry Timestamp</h3>
+<p>This section starts with a one byte flag. This flag is either:</p>
+<ul>
+<li><code>0xFD</code>: The following expire value is specified in seconds. The following 4 bytes represent the Unix timestamp as an unsigned integer.</li>
+<li><code>0xFC</code>: The following expire value is specified in milliseconds. The following 8 bytes represent the Unix timestamp as an unsigned long.</li>
+</ul>
+<p>During the import process, keys that have expired must be discarded.</p>
+<h3 id="value-type">Value Type</h3>
+<p>A one byte flag indicates encoding used to save the Value.</p>
+<ul>
+<li><code>0</code> = <a href="#string-encoding">String Encoding</a></li>
+<li><code>1</code> = <a href="#list-encoding">List Encoding</a></li>
+<li><code>2</code> = <a href="#set-encoding">Set Encoding</a></li>
+<li><code>3</code> = <a href="#sorted-set-encoding">Sorted Set Encoding</a></li>
+<li><code>4</code> = <a href="#hash-encoding">Hash Encoding</a></li>
+<li><code>9</code> = <a href="#zipmap-encoding">Zipmap Encoding</a></li>
+<li><code>10</code> = <a href="#ziplist-encoding">Ziplist Encoding</a></li>
+<li><code>11</code> = <a href="#intset-encoding">Intset Encoding</a></li>
+<li><code>12</code> = <a href="#sorted-set-in-ziplist-encoding">Sorted Set in Ziplist Encoding</a></li>
+<li><code>13</code> = <a href="#hashmap-in-ziplist-encoding">Hashmap in Ziplist Encoding</a> (Introduced in RDB version 4)</li>
+<li><code>14</code> = <a href="#quicklist-encoding">List in Quicklist encoding</a> (Introduced in RDB version 7)</li>
+</ul>
+<h3 id="key">Key</h3>
+<p>The key is simply encoded as a Redis string. See the section <a href="#string-encoding">String Encoding</a> to learn how the key is encoded.</p>
+<h3 id="value">Value</h3>
+<p>The value is parsed according to the previously read <a href="#value-type">Value Type</a></p>
+<h2 id="encodings">Encodings</h2>
+<h3 id="length-encoding">Length Encoding</h3>
+<p>Length encoding is used to store the length of the next object in the stream. Length encoding is a variable byte encoding designed to use as few bytes as possible.</p>
+<p>This is how length encoding works : Read one byte from the stream, compare the two most significant bits:</p>
+<table>
+<thead>
+<tr class="header">
+<th align="left">Bits</th>
+<th align="left">How to parse</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left"><code>00</code></td>
+<td align="left">The next 6 bits represent the length</td>
+</tr>
+<tr class="even">
+<td align="left"><code>01</code></td>
+<td align="left">Read one additional byte. The combined 14 bits represent the length</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>10</code></td>
+<td align="left">Discard the remaining 6 bits. The next 4 bytes from the stream represent the length</td>
+</tr>
+<tr class="even">
+<td align="left"><code>11</code></td>
+<td align="left">The next object is encoded in a special format. The remaining 6 bits indicate the format. May be used to store numbers or Strings, see <a href="#string-encoding">String Encoding</a></td>
+</tr>
+</tbody>
+</table>
+<p>As a result of this encoding:</p>
+<ul>
+<li>Numbers up to and including 63 can be stored in 1 byte</li>
+<li>Numbers up to and including 16383 can be stored in 2 bytes</li>
+<li>Numbers up to 2^32 -1 can be stored in 4 bytes</li>
+</ul>
+<h3 id="string-encoding">String Encoding</h3>
+<p>Redis Strings are binary safe - which means you can store anything in them. They do not have any special end-of-string token. It is best to think of Redis Strings as a byte array.</p>
+<p>There are three types of Strings in Redis:</p>
+<ul>
+<li>Length prefixed strings</li>
+<li>An 8, 16 or 32 bit integer</li>
+<li>A LZF compressed string</li>
+</ul>
+<h4 id="length-prefixed-string">Length Prefixed String</h4>
+<p>Length prefixed strings are quite simple. The length of the string in bytes is first encoded using <a href="#length-encoding">Length Encoding</a>. After this, the raw bytes of the string are stored.</p>
+<h4 id="integers-as-string">Integers as String</h4>
+<p>First read the section <a href="#length-encoding">Length Encoding</a>, specifically the part when the first two bits are <code>11</code>. In this case, the remaining 6 bits are read.</p>
+<p>If the value of those 6 bits is:</p>
+<ul>
+<li><code>0</code> indicates that an 8 bit integer follows</li>
+<li><code>1</code> indicates that a 16 bit integer follows</li>
+<li><code>2</code> indicates that a 32 bit integer follows</li>
+</ul>
+<h4 id="compressed-strings">Compressed Strings</h4>
+<p>First read the section <a href="#length-encoding">Length Encoding</a>, specifically the part when the first two bits are <code>11</code>. In this case, the remaining 6 bits are read. If the value of those 6 bits is 4, it indicates that a compressed string follows.</p>
+<p>The compressed string is read as follows:</p>
+<ul>
+<li>The compressed length <code>clen</code> is read from the stream using <a href="#length-encoding">Length Encoding</a></li>
+<li>The uncompressed length is read from the stream using <a href="#length-encoding">Length Encoding</a></li>
+<li>The next <code>clen</code> bytes are read from the stream</li>
+<li>Finally, these bytes are decompressed using LZF algorithm</li>
+</ul>
+<h3 id="list-encoding">List Encoding</h3>
+<p>A Redis list is represented as a sequence of strings.</p>
+<ul>
+<li>First, the size of the list <code>size</code> is read from the stream using <a href="#length-encoding">Length Encoding</a></li>
+<li>Next, <code>size</code> strings are read from the stream using <a href="#string-encoding">String Encoding</a></li>
+<li>The list is then re-constructed using these Strings</li>
+</ul>
+<h3 id="set-encoding">Set Encoding</h3>
+<p>Sets are encoded exactly like lists.</p>
+<h3 id="sorted-set-encoding">Sorted Set Encoding</h3>
+<ul>
+<li>First, the size of the sorted set <code>size</code> is read from the stream using <a href="#length-encoding">Length Encoding</a></li>
+<li>Next, <code>size</code> pairs of the value and its score are read from the stream.</li>
+<li>The value is <a href="#string-encoding">string encoded</a></li>
+<li>The next byte specifies the length of the encoded score (as an unsigned integer). This byte has 3 special meanings:
+<ul>
+<li><code>253</code>: not a number. Don’t read additional bytes</li>
+<li><code>254</code>: positive infinity. Don’t read additional bytes</li>
+<li><code>255</code>: negative infinity. Don’t read additional bytes</li>
+</ul></li>
+<li>Read that many bytes from the stream, representing the score as an ASCII-encoded float. Use String-to-float conversion to get the actual double value.</li>
+</ul>
+<p><em>Note: Depending on the value you may loose precision. Redis saves the score as a double</em></p>
+<p><strong>Example:</strong></p>
+<pre><code>02</code></pre>
+<h3 id="hash-encoding">Hash Encoding</h3>
+<ul>
+<li>First, the <code>size</code> of the hash is read from the stream using <a href="#length-encoding">Length Encoding</a></li>
+<li>Next <code>2 * size</code> strings are read from the stream using <a href="#string-encoding">String Encoding</a> (alternate strings are key and values)</li>
+</ul>
+<p><strong>Example:</strong></p>
+<pre><code>2 us washington india delhi</code></pre>
+<p>represents the map</p>
+<pre><code>{&quot;us&quot; =&gt; &quot;washington&quot;, &quot;india&quot; =&gt; &quot;delhi&quot;}</code></pre>
+<h3 id="zipmap-encoding">Zipmap Encoding</h3>
+<p>A Zipmap is a hashmap that has been serialized to a string. In essence, the key value pairs are stored sequentially. Looking up a key in this structure is O(N). This structure is used instead of a dictionary when the number of key value pairs are small.</p>
+<p>To parse a zipmap, first a string is read from the stream using <a href="#string-encoding">String Encoding</a>. The contents of this string represent the zipmap.</p>
+<p>The structure of a zipmap within this string is as follows:</p>
+<pre><code>&lt;zmlen&gt;&lt;len&gt;&quot;foo&quot;&lt;len&gt;&lt;free&gt;&quot;bar&quot;&lt;len&gt;&quot;hello&quot;&lt;len&gt;&lt;free&gt;&quot;world&quot;&lt;zmend&gt;</code></pre>
+<ul>
+<li><code>zmlen</code>: 1 byte that holds the size of the zip map. If it is greater than or equal to 254, value is not used. You will have to iterate the entire zip map to find the length.</li>
+<li><code>len</code>: the length of the following string, which can be either a key or a value. This length is stored in either 1 byte or 5 bytes (yes, it differs from <a href="#length-encoding">Length Encoding</a> described above). If the first byte is between 0 and 252, that is the length of the zipmap. If the first byte is 253, then the next 4 bytes read as an unsigned integer represent the length of the zipmap. 254 and 255 are invalid values for this field.</li>
+<li><code>free</code> : This is always 1 byte, and indicates the number of free bytes <em>after</em> the value. For example, if the value of a key is “America” and its get updated to “USA”, 4 free bytes will be available.</li>
+<li><code>zmend</code> : Always <code>255</code>. Indicates the end of the zipmap.</li>
+</ul>
+<p><strong>Example:</strong></p>
+<p><code>18 02 06 4D 4B 44 31 47 36 01 00 32 05 59 4E 4E 58 4b 04 00 46 37 54 49 FF ..</code></p>
+<ul>
+<li>Start by decoding this using <a href="#string-encoding">String Encoding</a>. You will notice that <code>0x18</code> (<code>24</code> in decimal) is the length of the string. Accordingly, we will read the next 24 bytes i.e. up to <code>FF</code></li>
+<li>Now, we are parsing the string starting at <code>02 06...</code> using the <a href="#zipmap-encoding">Zipmap Encoding</a></li>
+<li><code>02</code> is the number of entries in the hashmap.</li>
+<li><code>06</code> is the length of the next string. Since this is less than 254, we don’t have to read any additional bytes</li>
+<li>We read the next 6 bytes i.e. <code>4d 4b 44 31 47 36</code> to get the key “MKD1G6”</li>
+<li><code>01</code> is the length of the next string, which would be the value</li>
+<li><code>00</code> is the number of free bytes</li>
+<li>We read the next 1 byte, which is <code>0x32</code>. Thus, we get our value <code>&quot;2&quot;</code></li>
+<li>In this case, the free bytes is <code>0</code>, so we don’t skip anything</li>
+<li><code>05</code> is the length of the next string, in this case a key.</li>
+<li>We read the next 5 bytes <code>59 4e 4e 58 4b</code>, to get the key <code>&quot;YNNXK&quot;</code></li>
+<li><code>04</code> is the length of the next string, which is a value</li>
+<li><code>00</code> is the number of free bytes after the value</li>
+<li>We read the next 4 bytes i.e. <code>46 37 54 49</code> to get the value <code>&quot;F7TI&quot;</code></li>
+<li>Finally, we encounter <code>FF</code>, which indicates the end of this zip map</li>
+<li>Thus, this zip map represents the hash <code>{&quot;MKD1G6&quot; =&gt; &quot;2&quot;, &quot;YNNXK&quot; =&gt; &quot;F7TI&quot;}</code></li>
+</ul>
+<h3 id="ziplist-encoding">Ziplist Encoding</h3>
+<p>A Ziplist is a list that has been serialized to a string. In essence, the elements of the list are stored sequentially along with flags and offsets to allow efficient traversal of the list in both directions.</p>
+<p>To parse a ziplist, first a string is read from the stream using <a href="#string-encoding">String Encoding</a>. The contents of this string represent the ziplist.</p>
+<p>The structure of a ziplist within this string is as follows:</p>
+<pre><code>&lt;zlbytes&gt;&lt;zltail&gt;&lt;zllen&gt;&lt;entry&gt;&lt;entry&gt;&lt;zlend&gt;</code></pre>
+<ul>
+<li><code>zlbytes</code>: a 4 byte unsigned integer representing the total size in bytes of the ziplist. The 4 bytes are in little endian format - the least significant bit comes first.</li>
+<li><code>zltail</code>: a 4 byte unsigned integer in little endian format. It represents the offset to the tail (i.e. last) entry in the ziplist</li>
+<li><code>zllen</code>: This is a 2 byte unsigned integer in little endian format. It represents the number of entries in this ziplist</li>
+<li><code>entry</code>: An entry represents an element in the ziplist. Details below</li>
+<li><code>zlend</code>: Always <code>255</code>. It represents the end of the ziplist.</li>
+</ul>
+<p>Each entry in the ziplist has the following format :</p>
+<pre><code>&lt;length-prev-entry&gt;&lt;special-flag&gt;&lt;raw-bytes-of-entry&gt;</code></pre>
+<p><code>length-prev-entry</code>: stores the length of the previous entry, or 0 if this is the first entry. This allows easy traversal of the list in the reverse direction. This length is stored in either 1 byte or in 5 bytes. If the first byte is less than or equal to 253, it is considered as the length. If the first byte is 254, then the next 4 bytes are used to store the length. The 4 bytes are read as an unsigned integer.</p>
+<p><code>special-flag</code>: This flag indicates whether the entry is a string or an integer. It also indicates the length of the string, or the size of the integer. The various encodings of this flag are shown below:</p>
+<table>
+<thead>
+<tr class="header">
+<th align="left">Bytes</th>
+<th align="left">Length</th>
+<th align="left">Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left"><code>00pppppp</code></td>
+<td align="left">1 byte</td>
+<td align="left">String value with length less than or equal to 63 bytes (6 bits)</td>
+</tr>
+<tr class="even">
+<td align="left"><code>01pppppp|qqqqqqqq</code></td>
+<td align="left">2 bytes</td>
+<td align="left">String value with length less than or equal to 16383 bytes (14 bits)</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>10______|&lt;4 byte&gt;</code></td>
+<td align="left">5 bytes</td>
+<td align="left">Next 4 byte contain an unsigned int. String value with length greater than or equal to 16384 bytes</td>
+</tr>
+<tr class="even">
+<td align="left"><code>1100____</code></td>
+<td align="left">1 byte</td>
+<td align="left">Integer encoded as 16 bit Integer (2 bytes)</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>1101____</code></td>
+<td align="left">1 byte</td>
+<td align="left">Integer encoded as 32 bit Integer (4 bytes)</td>
+</tr>
+<tr class="even">
+<td align="left"><code>1110____</code></td>
+<td align="left">1 byte</td>
+<td align="left">Integer encoded as 64 bit Integer (8 bytes)</td>
+</tr>
+</tbody>
+</table>
+<p><code>raw-byte</code>: After the special flag, the raw bytes of entry follow. The number of bytes was previously determined as part of the special flag.</p>
+<p><strong>Example:</strong></p>
+<pre><code>23 23 00 00 00 1E 00 00 00 04 00 00 E0 FF FF FF FF FF
+FF FF 7F 0A D0 FF FF 00 00 06 C0 FC 3F 04 C0 3F 00 FF ...</code></pre>
+<ul>
+<li>Start by decoding this using <a href="#string-encoding">String Encoding</a>. <code>23</code> is the length of the string (35 in decimal), therefore we will read the next 35 bytes till <code>ff</code></li>
+<li>Now, we are parsing the string starting at <code>23 00 00 ...</code> using <a href="#ziplist-encoding">Ziplist encoding</a></li>
+<li>The first 4 bytes <code>23 00 00 00</code> represent the total length in bytes of this ziplist. Notice that this is in little endian format</li>
+<li>The next 4 bytes <code>1e 00 00 00</code> represent the offset to the tail entry. <code>1E</code> = 30 (in decimal), and this is a 0 based offset. 0th position = <code>23</code>, 1st position = <code>00</code> and so on. It follows that the last entry starts at <code>04 c0 3f 00 ..</code></li>
+<li>The next 2 bytes <code>04 00</code> represent the number of entries in this list as a big endian 16 bit integer. <code>04 00 = 4</code> in decimal.</li>
+<li>From now on, we start reading the entries</li>
+<li><code>00</code> represents the length of previous entry. <code>0</code> indicates this is the first entry.</li>
+<li><code>E0</code> is the special flag. Since it starts with the bit pattern <code>1110____</code>, we read the next 8 bytes as an integer. This is the first entry of the list.</li>
+<li>We now start the second entry</li>
+<li><code>0A</code> is the length of the previous entry. <code>0A</code> = <code>10</code> in decimal. 10 bytes = 1 byte for prev. length + 1 byte for special flag + 8 bytes for integer.</li>
+<li><code>D0</code> is the special flag. Since it starts with the bit pattern <code>1101____</code>, we read the next 4 bytes as an integer. This is the second entry of the list</li>
+<li>We now start the third entry</li>
+<li><code>06</code> is the length of previous entry. 6 bytes = 1 byte for prev. length + 1 byte for special flag + 4 bytes for integer</li>
+<li><code>C0</code> is the special flag. Since it starts with the bit pattern <code>1100____</code>, we read the next 2 bytes as an integer. This is the third entry of the list</li>
+<li>We now start the last entry</li>
+<li><code>04</code> is length of previous entry</li>
+<li><code>C0</code> indicates a 2 byte number</li>
+<li>We read the next 2 bytes, which gives us our fourth entry</li>
+<li>Finally, we encounter <code>FF</code>, which tells us we have consumed all elements in this ziplist.</li>
+<li>Thus, this ziplist stores the values <code>[0x7fffffffffffffff, 65535, 16380, 63]</code></li>
+</ul>
+<h3 id="intset-encoding">Intset Encoding</h3>
+<p>An Intset is a binary search tree of integers. The binary tree is implemented in an array of integers. An intset is used when all the elements of the set are integers. An Intset has support for up to 64 bit integers. As an optimization, if the integers can be represented in fewer bytes, the array of integers will be constructed from 16 bit or 32 bit integers. When a new element is inserted, the implementation takes care to upgrade if necessary.</p>
+<p>Since an Intset is a binary search tree, the numbers in this set will always be sorted.</p>
+<p>An Intset has an external interface of a Set.</p>
+<p>To parse an Intset, first a string is read from thee stream using <a href="#string-encoding">String Encoding</a>. The contents of this string represent the Intset.</p>
+<p>Within this string, the Intset has a very simple layout :</p>
+<pre><code>&lt;encoding&gt;&lt;length-of-contents&gt;&lt;contents&gt;</code></pre>
+<ul>
+<li><code>encoding</code>: is a 32 bit unsigned integer. It has 3 possible values - 2, 4 or 8. It indicates the size in bytes of each integer stored in contents. And yes, this is wasteful - we could have stored the same information in 2 bits.</li>
+<li><code>length-of-contents</code>: is a 32 bit unsigned integer, and indicates the length of the contents array</li>
+<li><code>contents</code>: is an array of $length-of-contents bytes. It contains the binary tree of integers</li>
+</ul>
+<p><strong>Example</strong></p>
+<p><code>14 04 00 00 00 03 00 00 00 FC FF 00 00 FD FF 00 00 FE FF 00 00 ...</code></p>
+<ul>
+<li>Start by decoding this using “String Encoding”. <code>14</code> is the length of the string, therefore we will read the next 20 bytes till <code>00</code></li>
+<li>Now, we start interpreting the string starting at <code>04 00 00 ...</code></li>
+<li>The first 4 bytes <code>04 00 00 00</code> is the encoding. Since this evaluates to 4, we know we are dealing with 32 bit integers</li>
+<li>The next 4 bytes <code>03 00 00 00</code> is the length of contents. So, we know we are dealing with 3 integers, each 4 byte long</li>
+<li>From now on, we read in groups of 4 bytes, and convert it into a unsigned integer</li>
+<li>Thus, our intset looks like <code>[0x0000FFFC, 0x0000FFFD, 0x0000FFFE]</code>. Notice that the integers are in little endian format i.e. least significant bit came first.</li>
+</ul>
+<h3 id="sorted-set-in-ziplist-encoding">Sorted Set in Ziplist Encoding</h3>
+<p>A sorted set in ziplist encoding is stored just like the <a href="#ziplist-encoding">Ziplist</a> described above. Each element in the sorted set is followed by its score in the ziplist.</p>
+<p><strong>Example</strong></p>
+<p><code>['Manchester City', 1, 'Manchester United', 2, 'Tottenham', 3]</code></p>
+<p>As you see, the scores follow each element.</p>
+<h3 id="hashmap-in-ziplist-encoding">Hashmap in Ziplist Encoding</h3>
+<p>In this, key=value pairs of a hashmap are stored as successive entries in a ziplist.</p>
+<p>Note: This was introduced in RDB version 4. This deprecates the <a href="#zipmap-encoding">zipmap encoding</a> that was used in earlier versions.</p>
+<p><strong>Example</strong></p>
+<p><code>{&quot;us&quot; =&gt; &quot;washington&quot;, &quot;india&quot; =&gt; &quot;delhi&quot;}</code></p>
+<p>is stored in a ziplist as :</p>
+<p><code>[&quot;us&quot;, &quot;washington&quot;, &quot;india&quot;, &quot;delhi&quot;]</code></p>
+<h3 id="quicklist-encoding">Quicklist Encoding</h3>
+<p>RDB Version 7 introduced a new variant of list encoding: Quicklist.</p>
+<p>Quicklist is a linked list of ziplists. Quicklist combines the memory efficiency of small ziplists with the extensibility of a linked list allowing us to create space-efficient lists of any length.</p>
+<p>To parse a quicklist, first a string is read from the stream using <a href="#string-encoding">String Encoding</a>. The contents of this string represent the ziplist.</p>
+<p>The structure of a quicklist within this string is as follows:</p>
+<pre><code>&lt;len&gt;&lt;ziplist&gt;&lt;ziplist&gt;...</code></pre>
+<ul>
+<li><code>len</code>: This is the number of nodes of the linked list, <a href="#length-encoding">length-encoded</a></li>
+<li><code>ziplist</code>: A string that wraps a ziplist, parse it with <a href="#ziplist-encoding">Ziplist encoding</a></li>
+</ul>
+<p>A complete list needs to be constructed from all elements of all ziplists.</p>
+<p><strong>Example</strong>:</p>
+<pre><code>01 00 0e 09 71 75 ...</code></pre>
+<p><em>TODO: proper example</em></p>
+<h2 id="crc64-checksum">CRC64 Checksum</h2>
+<p>Starting with RDB Version 5, an 8 byte CRC64 checksum is added to the end of the file. It is possible to disable this checksum via a parameter in redis.conf. When the checksum is disabled, this field will have zeroes.</p>
+</div>
+<div class="footer">
+Copyright © 2015 Jan-Erik Rediger, released under the MIT license |
+<a href="#TOC">to the TOC</a>
+</div>
+</body>
+</html>
