@@ -21,7 +21,7 @@ impl RdbParseFormatter for PlainFormatter {
         println!("End of RDB");
     }
 
-    fn checksum(&mut self, checksum: Vec<u8>) {
+    fn checksum(&mut self, checksum: &[u8]) {
         let _ = self.out.write_str("Checksum: ");
         let _ = self.out.write(checksum.as_slice());
         let _ = self.out.write_str("\n");
@@ -35,7 +35,7 @@ impl RdbParseFormatter for PlainFormatter {
         println!("END_DB: {}", db_number);
     }
 
-    fn set(&mut self, key: Vec<u8>, value: Vec<u8>, _expiry: Option<u32>) {
+    fn set(&mut self, key: &[u8], value: &[u8], _expiry: Option<u32>) {
         let _ = self.out.write(key.as_slice());
         let _ = self.out.write_str(": ");
 
@@ -44,7 +44,7 @@ impl RdbParseFormatter for PlainFormatter {
         let _ = self.out.flush();
     }
 
-    fn aux_field(&mut self, key: Vec<u8>, value: Vec<u8>) {
+    fn aux_field(&mut self, key: &[u8], value: &[u8]) {
         let _ = self.out.write_str("[aux] ");
         let _ = self.out.write(key.as_slice());
         let _ = self.out.write_str(": ");

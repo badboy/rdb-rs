@@ -89,27 +89,31 @@ impl RdbParseFormatter for JSONFormatter {
         self.is_first_key_in_db = true;
     }
 
-    fn set(&mut self, key: Vec<u8>, value: Vec<u8>, __expiry: Option<u32>) {
+    fn set(&mut self, key: &[u8], value: &[u8], _expiry: Option<u32>) {
         self.start_key(0);
         self.write_key(key.as_slice());
         self.out.write_str(":");
         self.write_key(value.as_slice());
     }
 
-    fn start_hash(&mut self, key: Vec<u8>, length: u32,
+    fn start_hash(&mut self, key: &[u8], length: u32,
                   _expiry: Option<u32>, _info: Option<()>) {
         self.start_key(length);
         self.write_key(key.as_slice());
         self.out.write_str(":{");
+        self.out.flush();
     }
-    fn end_hash(&mut self, _key: Vec<u8>) {
+    fn end_hash(&mut self, _key: &[u8]) {
         self.end_key();
         self.out.write_str("}");
+        self.out.flush();
     }
-    fn hash_element(&mut self, _key: Vec<u8>, field: Vec<u8>, value: Vec<u8>) {
+    fn hash_element(&mut self, _key: &[u8], field: &[u8], value: &[u8]) {
         self.write_comma();
         self.write_key(field.as_slice());
+        self.out.write_str(":");
         self.write_value(value.as_slice());
+        self.out.flush();
     }
 
 
@@ -145,18 +149,18 @@ impl RdbParseFormatter for JSONFormatter {
         self.write_value(value.as_slice());
     }
 
-    fn start_sorted_set(&mut self, key: Vec<u8>, length: u32,
+    fn start_sorted_set(&mut self, key: &[u8], length: u32,
                         _expiry: Option<u32>, _info: Option<()>) {
         self.start_key(length);
         self.write_key(key.as_slice());
         self.out.write_str(":{");
     }
-    fn end_sorted_set(&mut self, _key: Vec<u8>) {
+    fn end_sorted_set(&mut self, _key: &[u8]) {
         self.end_key();
         self.out.write_str("}");
     }
-    fn sorted_set_element(&mut self, _key: Vec<u8>,
-                          score: f64, member: Vec<u8>) {
+    fn sorted_set_element(&mut self, _key: &[u8],
+                          score: f64, member: &[u8]) {
         self.write_comma();
         self.write_key(member.as_slice());
         self.out.write_str(":");
