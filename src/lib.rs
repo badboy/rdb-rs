@@ -78,7 +78,8 @@ pub enum DataType {
 
 pub struct RdbParser<R: Reader, F: RdbParseFormatter> {
     input: R,
-    formatter: F
+    formatter: F,
+    last_expiretime: Option<u64>
 }
 
 pub fn read_length_with_encoding<R: Reader>(input: &mut R) -> (u32, bool) {
@@ -163,7 +164,7 @@ pub fn parse<R: Reader, F: RdbParseFormatter>(input: R, formatter: F) {
 
 impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
     pub fn new(input: R, formatter: F) -> RdbParser<R, F> {
-        RdbParser{input: input, formatter: formatter}
+        RdbParser{input: input, formatter: formatter, last_expiretime: None}
     }
 
     pub fn parse(&mut self) {
@@ -187,15 +188,15 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
 
                     let checksum = self.input.read_to_end().unwrap();
                     self.formatter.checksum(checksum.as_slice());
-                    break ;
+                    break;
                 },
                 op_codes::EXPIRETIME_MS => {
                     let expiretime_ms = self.input.read_le_u64().unwrap();
-                    println!("EXPIRETIME_MS: {}", expiretime_ms);
+                    self.last_expiretime = Some(expiretime_ms);
                 },
                 op_codes::EXPIRETIME => {
                     let expiretime = self.input.read_be_u32().unwrap();
-                    println!("EXPIRETIME: {}", expiretime);
+                    self.last_expiretime = Some(expiretime as u64 * 1000);
                 },
                 op_codes::RESIZEDB => {
                     let db_size = read_length(&mut self.input);
@@ -213,10 +214,8 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
                 },
                 _ => {
                     let key = read_blob(&mut self.input);
-
-                    match self.read_type(key.as_slice(), next_op) {
-                        _ => {}
-                    }
+                    self.read_type(key.as_slice(), next_op);
+                    self.last_expiretime = None;
                 }
             }
 
@@ -227,7 +226,7 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
         let mut len = read_length(&mut self.input);
         let mut list = vec![];
 
-        self.formatter.start_list(key, len, None, None);
+        self.formatter.start_list(key, len, self.last_expiretime, None);
 
         while len > 0 {
             let blob = read_blob(&mut self.input);
@@ -245,7 +244,7 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
         let mut set = vec![];
         let mut set_items = read_length(&mut self.input);
 
-        self.formatter.start_sorted_set(key, set_items, None, None);
+        self.formatter.start_sorted_set(key, set_items, self.last_expiretime, None);
 
         while set_items > 0 {
             let val = read_blob(&mut self.input);
@@ -276,7 +275,7 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
         let mut hash = vec![];
         let mut hash_items = read_length(&mut self.input);
 
-        self.formatter.start_hash(key, hash_items, None, None);
+        self.formatter.start_hash(key, hash_items, self.last_expiretime, None);
 
         while hash_items > 0 {
             let field = read_blob(&mut self.input);
@@ -362,7 +361,7 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
         let zllen = reader.read_le_u16().unwrap();
         let mut list = Vec::with_capacity(zllen as usize);
 
-        self.formatter.start_list(key, zllen as u32, None, None);
+        self.formatter.start_list(key, zllen as u32, self.last_expiretime, None);
 
         for _ in range(0, zllen) {
             let entry = self.read_ziplist_entry(&mut reader);
@@ -451,7 +450,7 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
         let byte_size = reader.read_le_u32().unwrap();
         let intset_length = reader.read_le_u32().unwrap();
 
-        self.formatter.start_set(key, intset_length, None, None);
+        self.formatter.start_set(key, intset_length, self.last_expiretime, None);
 
         for _ in range(0, intset_length) {
             let val = match byte_size {
@@ -475,7 +474,7 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
         // FIXME: We don't know the real length here
         // Not sure how we do it correctly
         // Also: We can't call read_list_ziplist as is
-        self.formatter.start_set(key, 0, None, None);
+        self.formatter.start_set(key, 0, self.last_expiretime, None);
         let mut list = vec![];
         for _ in range(0, len) {
             let zl = self.read_list_ziplist(key);

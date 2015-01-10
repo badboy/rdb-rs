@@ -35,7 +35,7 @@ impl RdbParseFormatter for PlainFormatter {
         println!("END_DB: {}", db_number);
     }
 
-    fn set(&mut self, key: &[u8], value: &[u8], _expiry: Option<u32>) {
+    fn set(&mut self, key: &[u8], value: &[u8], _expiry: Option<u64>) {
         let _ = self.out.write(key.as_slice());
         let _ = self.out.write_str(": ");
 

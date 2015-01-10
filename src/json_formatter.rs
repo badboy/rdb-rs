@@ -89,7 +89,7 @@ impl RdbParseFormatter for JSONFormatter {
         self.is_first_key_in_db = true;
     }
 
-    fn set(&mut self, key: &[u8], value: &[u8], _expiry: Option<u32>) {
+    fn set(&mut self, key: &[u8], value: &[u8], _expiry: Option<u64>) {
         self.start_key(0);
         self.write_key(key.as_slice());
         self.out.write_str(":");
@@ -97,7 +97,7 @@ impl RdbParseFormatter for JSONFormatter {
     }
 
     fn start_hash(&mut self, key: &[u8], length: u32,
-                  _expiry: Option<u32>, _info: Option<()>) {
+                  _expiry: Option<u64>, _info: Option<()>) {
         self.start_key(length);
         self.write_key(key.as_slice());
         self.out.write_str(":{");
@@ -118,7 +118,7 @@ impl RdbParseFormatter for JSONFormatter {
 
 
     fn start_set(&mut self, key: &[u8], cardinality: u32,
-                 _expiry: Option<u32>, _info: Option<()>) {
+                 _expiry: Option<u64>, _info: Option<()>) {
         self.start_key(cardinality);
         self.write_key(key);
         self.out.write_str(":[");
@@ -135,7 +135,7 @@ impl RdbParseFormatter for JSONFormatter {
 
 
     fn start_list(&mut self, key: &[u8], length: u32,
-                  _expiry: Option<u32>, _info: Option<()>) {
+                  _expiry: Option<u64>, _info: Option<()>) {
         self.start_key(length);
         self.write_key(key.as_slice());
         self.out.write_str(":[");
@@ -150,7 +150,7 @@ impl RdbParseFormatter for JSONFormatter {
     }
 
     fn start_sorted_set(&mut self, key: &[u8], length: u32,
-                        _expiry: Option<u32>, _info: Option<()>) {
+                        _expiry: Option<u64>, _info: Option<()>) {
         self.start_key(length);
         self.write_key(key.as_slice());
         self.out.write_str(":{");
