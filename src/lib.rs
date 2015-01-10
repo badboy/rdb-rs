@@ -472,6 +472,9 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
     fn read_quicklist(&mut self, key: &[u8]) -> Vec<DataType> {
         let len = read_length(&mut self.input);
 
+        // FIXME: We don't know the real length here
+        // Not sure how we do it correctly
+        // Also: We can't call read_list_ziplist as is
         self.formatter.start_set(key, 0, None, None);
         let mut list = vec![];
         for _ in range(0, len) {
