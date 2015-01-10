@@ -1,6 +1,13 @@
+#![allow(unstable)]
 extern crate rdb;
-use rdb::*;
 use std::io::MemReader;
+use rdb::{
+    read_length,
+    read_length_with_encoding,
+    verify_magic,
+    verify_version,
+    read_blob
+};
 
 #[test]
 fn test_read_length() {
@@ -39,26 +46,22 @@ fn test_read_blob() {
 
 #[test]
 fn test_verify_version() {
-    let mut parser = RdbParser::new(MemReader::new(vec![0x30, 0x30, 0x30, 0x33]), NilFormatter);
     assert_eq!(
         true,
-        parser.verify_version());
+        verify_version(&mut MemReader::new(vec![0x30, 0x30, 0x30, 0x33])));
 
-    let mut parser = RdbParser::new(MemReader::new(vec![0x30, 0x30, 0x30, 0x3a]), NilFormatter);
     assert_eq!(
         false,
-        parser.verify_version());
+        verify_version(&mut MemReader::new(vec![0x30, 0x30, 0x30, 0x3a])));
 }
 
 #[test]
 fn test_verify_magic() {
-    let mut parser = RdbParser::new(MemReader::new(vec![0x52, 0x45, 0x44, 0x49, 0x53]), NilFormatter);
     assert_eq!(
         true,
-        parser.verify_magic());
+        verify_magic(&mut MemReader::new(vec![0x52, 0x45, 0x44, 0x49, 0x53])));
 
-    let mut parser = RdbParser::new(MemReader::new(vec![0x51, 0x0, 0x0, 0x0, 0x0]), NilFormatter);
     assert_eq!(
         false,
-        parser.verify_magic());
+        verify_magic(&mut MemReader::new(vec![0x51, 0x0, 0x0, 0x0, 0x0])));
 }
