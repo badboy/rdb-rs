@@ -1,4 +1,5 @@
 #![feature(slicing_syntax)]
+#![allow(unstable)]
 
 extern crate lzf;
 use std::str;
@@ -125,16 +126,16 @@ pub fn parse<R: Reader, F: RdbParseFormatter>(input: &mut R, formatter: &mut F) 
                         formatter.set(key, t);
                     },
                     DataType::Number(t) => { println!("{}", t) },
-                    DataType::ListOfTypes(t) => { println!("{}", t) },
-                    DataType::Intset(t) => { println!("{}", t) },
+                    DataType::ListOfTypes(_t) => { println!("ListOfTypes follows") },
+                    DataType::Intset(_t) => { println!("Intset follows") },
                     DataType::Hash(t) => {
                         for val in t.iter() {
-                            let _ = out.write(val[]);
+                            let _ = out.write(val.as_slice());
                             let _ = out.write_str(", ");
                         }
                         let _ = out.write_str("\n");
                     },
-                    DataType::HashOfTypes(t) => { println!("{}", t) },
+                    DataType::HashOfTypes(_t) => { println!("Hash follows") },
                     _ => {}
                 }
             }
@@ -194,8 +195,8 @@ fn read_sorted_set<R: Reader>(input: &mut R) -> Vec<(f64,Vec<u8>)> {
             254 => { std::f64::INFINITY },
             255 => { std::f64::NEG_INFINITY },
             _ => {
-                let tmp = input.read_exact(score_length as uint).unwrap();
-                unsafe{str::from_utf8_unchecked(tmp[])}.
+                let tmp = input.read_exact(score_length as usize).unwrap();
+                unsafe{str::from_utf8_unchecked(tmp.as_slice())}.
                     parse::<f64>().unwrap()
             }
         };
@@ -277,7 +278,7 @@ fn read_ziplist_entry<R: Reader>(input: &mut R) -> DataType {
     }
 
     // 3. Read value
-    let rawval = input.read_exact(length as uint).unwrap();
+    let rawval = input.read_exact(length as usize).unwrap();
     DataType::String(rawval)
 }
 
@@ -289,7 +290,7 @@ fn read_list_ziplist<R: Reader>(input: &mut R) -> Vec<DataType> {
     let _zlbytes = reader.read_le_u32().unwrap();
     let _zltail = reader.read_le_u32().unwrap();
     let zllen = reader.read_le_u16().unwrap();
-    let mut list = Vec::with_capacity(zllen as uint);
+    let mut list = Vec::with_capacity(zllen as usize);
 
     for _ in range(0, zllen) {
         list.push(read_ziplist_entry(&mut reader));
@@ -310,7 +311,7 @@ fn read_zipmap_entry<R: Reader>(next_byte: u8, input: &mut R) -> Vec<u8> {
         _ => { elem_len = next_byte as u32 }
     }
 
-    input.read_exact(elem_len as uint).unwrap()
+    input.read_exact(elem_len as usize).unwrap()
 }
 
 fn read_hash_zipmap<R: Reader>(input: &mut R) -> Vec<Vec<u8>> {
@@ -323,7 +324,7 @@ fn read_hash_zipmap<R: Reader>(input: &mut R) -> Vec<Vec<u8>> {
     let mut length;
     let mut hash;
     if zmlen <= 254 {
-        length = zmlen as uint;
+        length = zmlen as usize;
         hash = Vec::with_capacity(length);
     } else {
         length = -1;
@@ -473,12 +474,12 @@ pub fn read_blob<R: Reader>(input: &mut R) -> Vec<u8> {
             encoding::LZF => {
                 let compressed_length = read_length(input);
                 let real_length = read_length(input);
-                let data = input.read_exact(compressed_length as uint).unwrap();
-                lzf::decompress(data.as_slice(), real_length as uint).unwrap()
+                let data = input.read_exact(compressed_length as usize).unwrap();
+                lzf::decompress(data.as_slice(), real_length as usize).unwrap()
             },
             _ => { panic!("Unknown encoding: {}", length) }
         }
     } else {
-        input.read_exact(length as uint).unwrap()
+        input.read_exact(length as usize).unwrap()
     }
 }

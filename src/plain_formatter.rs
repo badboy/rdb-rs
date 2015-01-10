@@ -7,7 +7,7 @@ pub struct PlainFormatter {
 
 impl PlainFormatter {
     pub fn new() -> PlainFormatter {
-        let out = box io::stdout() as Box<Writer>;
+        let out = Box::new(io::stdout());
         PlainFormatter { out: out }
     }
 }
@@ -22,7 +22,9 @@ impl RdbParseFormatter for PlainFormatter {
     }
 
     fn checksum(&mut self, checksum: Vec<u8>) {
-        println!("Checksum: {}", checksum);
+        let _ = self.out.write_str("Checksum: ");
+        let _ = self.out.write(checksum.as_slice());
+        let _ = self.out.write_str("\n");
     }
 
     fn start_database(&mut self, db_number: u32) {
@@ -34,19 +36,19 @@ impl RdbParseFormatter for PlainFormatter {
     }
 
     fn set(&mut self, key: Vec<u8>, value: Vec<u8>) {
-        let _ = self.out.write(key[]);
+        let _ = self.out.write(key.as_slice());
         let _ = self.out.write_str(": ");
 
-        let _ = self.out.write(value[]);
+        let _ = self.out.write(value.as_slice());
         let _ = self.out.write_str("\n");
         let _ = self.out.flush();
     }
 
     fn aux_field(&mut self, key: Vec<u8>, value: Vec<u8>) {
         let _ = self.out.write_str("[aux] ");
-        let _ = self.out.write(key[]);
+        let _ = self.out.write(key.as_slice());
         let _ = self.out.write_str(": ");
-        let _ = self.out.write(value[]);
+        let _ = self.out.write(value.as_slice());
         let _ = self.out.write_str("\n");
         let _ = self.out.flush();
     }
