@@ -82,6 +82,80 @@ pub struct RdbParser<R: Reader, F: RdbParseFormatter> {
     formatter: F
 }
 
+pub fn read_length_with_encoding<R: Reader>(input: &mut R) -> (u32, bool) {
+    let mut length;
+    let mut is_encoded = false;
+
+    let enc_type = input.read_byte().unwrap();
+
+    match (enc_type & 0xC0) >> 6 {
+        constants::RDB_ENCVAL => {
+            is_encoded = true;
+            length = (enc_type & 0x3F) as u32;
+        },
+        constants::RDB_6BITLEN => {
+            length = (enc_type & 0x3F) as u32;
+        },
+        constants::RDB_14BITLEN => {
+            let next_byte = input.read_byte().unwrap();
+            length = (((enc_type & 0x3F) as u32) <<8) | next_byte as u32;
+        },
+        _ => {
+            length = input.read_be_u32().unwrap();
+        }
+    }
+
+    (length, is_encoded)
+}
+
+pub fn read_length<R: Reader>(input: &mut R) -> u32 {
+    let (length, _) = read_length_with_encoding(input);
+    length
+}
+
+pub fn verify_magic<R: Reader>(input: &mut R) -> bool {
+    let magic = input.read_exact(5).unwrap();
+
+    // Meeeeeh.
+    magic[0] == constants::RDB_MAGIC.as_bytes()[0] &&
+        magic[1] == constants::RDB_MAGIC.as_bytes()[1] &&
+        magic[2] == constants::RDB_MAGIC.as_bytes()[2] &&
+        magic[3] == constants::RDB_MAGIC.as_bytes()[3] &&
+        magic[4] == constants::RDB_MAGIC.as_bytes()[4]
+}
+
+pub fn verify_version<R: Reader>(input: &mut R) -> bool {
+    let version = input.read_exact(4).unwrap();
+
+    let version = (version[0]-48) as u32 * 1000 +
+        (version[1]-48) as u32 * 100 +
+        (version[2]-48) as u32 * 10 +
+        (version[3]-48) as u32;
+
+    version >= version::SUPPORTED_MINIMUM &&
+        version <= version::SUPPORTED_MAXIMUM
+}
+
+pub fn read_blob<R: Reader>(input: &mut R) -> Vec<u8> {
+    let (length, is_encoded) = read_length_with_encoding(input);
+
+    if is_encoded {
+        match length {
+            encoding::INT8 => { helper::int_to_vec(input.read_i8().unwrap() as i32) },
+            encoding::INT16 => { helper::int_to_vec(input.read_le_i16().unwrap() as i32) },
+            encoding::INT32 => { helper::int_to_vec(input.read_le_i32().unwrap() as i32) },
+            encoding::LZF => {
+                let compressed_length = read_length(input);
+                let real_length = read_length(input);
+                let data = input.read_exact(compressed_length as usize).unwrap();
+                lzf::decompress(data.as_slice(), real_length as usize).unwrap()
+            },
+            _ => { panic!("Unknown encoding: {}", length) }
+        }
+    } else {
+        input.read_exact(length as usize).unwrap()
+    }
+}
 
 pub fn parse<R: Reader, F: RdbParseFormatter>(input: R, formatter: F) {
     let mut parser = RdbParser::new(input, formatter);
@@ -94,8 +168,8 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
     }
 
     pub fn parse(&mut self) {
-        assert!(self.verify_magic());
-        assert!(self.verify_version());
+        assert!(verify_magic(&mut self.input));
+        assert!(verify_version(&mut self.input));
 
         self.formatter.start_rdb();
 
@@ -106,7 +180,7 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
 
             match next_op {
                 op_codes::SELECTDB => {
-                    last_database = self.read_length();
+                    last_database = read_length(&mut self.input);
                     self.formatter.start_database(last_database);
                 },
                 op_codes::EOF => {
@@ -126,19 +200,19 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
                     println!("EXPIRETIME: {}", expiretime);
                 },
                 op_codes::RESIZEDB => {
-                    let db_size = self.read_length();
-                    let expires_size = self.read_length();
+                    let db_size = read_length(&mut self.input);
+                    let expires_size = read_length(&mut self.input);
                     println!("DB Size: {}, Expires Size: {}",
                              db_size, expires_size);
                 },
                 op_codes::AUX => {
-                    let auxkey = self.read_blob();
-                    let auxval = self.read_blob();
+                    let auxkey = read_blob(&mut self.input);
+                    let auxval = read_blob(&mut self.input);
 
                     self.formatter.aux_field(auxkey, auxval);
                 },
                 _ => {
-                    let key = self.read_blob();
+                    let key = read_blob(&mut self.input);
 
                     match self.read_type(next_op) {
                         DataType::String(t) => {
@@ -163,36 +237,12 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
         }
     }
 
-    pub fn verify_magic(&mut self) -> bool {
-        let magic = self.input.read_exact(5).unwrap();
-
-        // Meeeeeh.
-        magic[0] == constants::RDB_MAGIC.as_bytes()[0] &&
-            magic[1] == constants::RDB_MAGIC.as_bytes()[1] &&
-            magic[2] == constants::RDB_MAGIC.as_bytes()[2] &&
-            magic[3] == constants::RDB_MAGIC.as_bytes()[3] &&
-            magic[4] == constants::RDB_MAGIC.as_bytes()[4]
-    }
-
-    pub fn verify_version(&mut self) -> bool {
-        let version = self.input.read_exact(4).unwrap();
-
-        let version = (version[0]-48) as u32 * 1000 +
-            (version[1]-48) as u32 * 100 +
-            (version[2]-48) as u32 * 10 +
-            (version[3]-48) as u32;
-
-        version >= version::SUPPORTED_MINIMUM &&
-            version <= version::SUPPORTED_MAXIMUM
-    }
-
-
     fn read_linked_list(&mut self) -> Vec<Vec<u8>> {
-        let mut len = self.read_length();
+        let mut len = read_length(&mut self.input);
         let mut list = vec![];
 
         while len > 0 {
-            let blob = self.read_blob();
+            let blob = read_blob(&mut self.input);
             list.push(blob);
             len -= 1;
         }
@@ -202,10 +252,10 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
 
     fn read_sorted_set(&mut self) -> Vec<(f64,Vec<u8>)> {
         let mut set = vec![];
-        let mut set_items = self.read_length();
+        let mut set_items = read_length(&mut self.input);
 
         while set_items > 0 {
-            let val = self.read_blob();
+            let val = read_blob(&mut self.input);
             let score_length = self.input.read_byte().unwrap();
             let score = match score_length {
                 253 => { std::f64::NAN },
@@ -228,11 +278,11 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
 
     fn read_hash(&mut self) -> Vec<Vec<u8>> {
         let mut hash = vec![];
-        let mut hash_items = self.read_length();
+        let mut hash_items = read_length(&mut self.input);
         hash_items = 2*hash_items;
 
         while hash_items > 0 {
-            let val = self.read_blob();
+            let val = read_blob(&mut self.input);
             hash.push(val);
 
             hash_items -= 1;
@@ -300,7 +350,7 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
     }
 
     fn read_list_ziplist(&mut self) -> Vec<DataType> {
-        let ziplist = self.read_blob();
+        let ziplist = read_blob(&mut self.input);
 
         let mut reader = MemReader::new(ziplist);
 
@@ -332,7 +382,7 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
     }
 
     fn read_hash_zipmap(&mut self) -> Vec<Vec<u8>> {
-        let zipmap = self.read_blob();
+        let zipmap = read_blob(&mut self.input);
 
         let mut reader = MemReader::new(zipmap);
 
@@ -379,7 +429,7 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
     fn read_set_intset(&mut self) -> Vec<i64> {
         let mut set = vec![];
 
-        let intset = self.read_blob();
+        let intset = read_blob(&mut self.input);
 
         let mut reader = MemReader::new(intset);
         let byte_size = reader.read_le_u32().unwrap();
@@ -400,7 +450,7 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
     }
 
     fn read_quicklist(&mut self) -> Vec<DataType> {
-        let len = self.read_length();
+        let len = read_length(&mut self.input);
 
         let mut list = vec![];
         for _ in range(0, len) {
@@ -413,7 +463,7 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
     fn read_type(&mut self, value_type: u8) -> DataType {
         match value_type {
             types::STRING => {
-                DataType::String(self.read_blob())
+                DataType::String(read_blob(&mut self.input))
             },
             types::LIST => {
                 DataType::List(self.read_linked_list())
@@ -449,55 +499,4 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
         }
     }
 
-    pub fn read_length_with_encoding(&mut self) -> (u32, bool) {
-        let mut length;
-        let mut is_encoded = false;
-
-        let enc_type = self.input.read_byte().unwrap();
-
-        match (enc_type & 0xC0) >> 6 {
-            constants::RDB_ENCVAL => {
-                is_encoded = true;
-                length = (enc_type & 0x3F) as u32;
-            },
-            constants::RDB_6BITLEN => {
-                length = (enc_type & 0x3F) as u32;
-            },
-            constants::RDB_14BITLEN => {
-                let next_byte = self.input.read_byte().unwrap();
-                length = (((enc_type & 0x3F) as u32) <<8) | next_byte as u32;
-            },
-            _ => {
-                length = self.input.read_be_u32().unwrap();
-            }
-        }
-
-        (length, is_encoded)
-    }
-
-    pub fn read_length(&mut self) -> u32 {
-        let (length, _) = self.read_length_with_encoding();
-        length
-    }
-
-    pub fn read_blob(&mut self) -> Vec<u8> {
-        let (length, is_encoded) = self.read_length_with_encoding();
-
-        if is_encoded {
-            match length {
-                encoding::INT8 => { helper::int_to_vec(self.input.read_i8().unwrap() as i32) },
-                encoding::INT16 => { helper::int_to_vec(self.input.read_le_i16().unwrap() as i32) },
-                encoding::INT32 => { helper::int_to_vec(self.input.read_le_i32().unwrap() as i32) },
-                encoding::LZF => {
-                    let compressed_length = self.read_length();
-                    let real_length = self.read_length();
-                    let data = self.input.read_exact(compressed_length as usize).unwrap();
-                    lzf::decompress(data.as_slice(), real_length as usize).unwrap()
-                },
-                _ => { panic!("Unknown encoding: {}", length) }
-            }
-        } else {
-            self.input.read_exact(length as usize).unwrap()
-        }
-    }
 }
