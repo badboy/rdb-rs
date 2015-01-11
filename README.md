@@ -16,11 +16,10 @@ extern crate rdb;
 
 fn main() {
     let file = File::open(&Path::new("dump.rdb"));
-    let mut reader = BufferedReader::new(file);
+    let reader = BufferedReader::new(file);
+    let formatter = rdb::JSONFormatter::new();
 
-    let mut formatter = PlainFormatter::new();
-
-    rdb::parse(&mut reader, &mut formatter)
+    rdb::parse(reader, formatter)
 }
 
 ```
