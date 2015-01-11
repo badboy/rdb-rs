@@ -5,8 +5,8 @@ extern crate lzf;
 use std::str;
 use lzf::decompress;
 use std::io::MemReader;
-use formatter::RdbParseFormatter;
 
+pub use formatter::RdbParseFormatter;
 pub use nil_formatter::NilFormatter;
 pub use plain_formatter::PlainFormatter;
 pub use json_formatter::JSONFormatter;

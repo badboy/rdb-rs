@@ -11,3 +11,4 @@ doc  = false
 
 [dependencies]
 lzf = "*"
+getopts = "*"
