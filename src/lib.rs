@@ -10,6 +10,7 @@ use formatter::RdbParseFormatter;
 pub use nil_formatter::NilFormatter;
 pub use plain_formatter::PlainFormatter;
 pub use json_formatter::JSONFormatter;
+pub use protocol_formatter::ProtocolFormatter;
 
 mod helper;
 
@@ -17,7 +18,7 @@ pub mod formatter;
 pub mod nil_formatter;
 pub mod plain_formatter;
 pub mod json_formatter;
-
+pub mod protocol_formatter;
 
 mod version {
     pub const SUPPORTED_MINIMUM : u32 = 1;
@@ -488,7 +489,7 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
         match value_type {
             types::STRING => {
                 let val = read_blob(&mut self.input);
-                self.formatter.set(key, val.as_slice(), None);
+                self.formatter.set(key, val.as_slice(), self.last_expiretime);
                 DataType::String(val)
             },
             types::LIST => {

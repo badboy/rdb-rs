@@ -21,7 +21,6 @@ pub trait RdbParseFormatter {
     fn end_set(&mut self, key: &[u8]) {}
     fn set_element(&mut self, key: &[u8], member: &[u8]) {}
 
-
     fn start_list(&mut self, key: &[u8], length: u32, expiry: Option<u64>, info: Option<()>) {}
     fn end_list(&mut self, key: &[u8]) {}
     fn list_element(&mut self, key: &[u8], value: &[u8]) {}
