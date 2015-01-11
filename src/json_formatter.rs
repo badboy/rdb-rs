@@ -26,14 +26,6 @@ impl JSONFormatter {
     }
 }
 
-fn encode_key<'a>(key: Vec<u8>) -> Vec<u8> {
-    key
-}
-
-fn encode_value<'a>(value: Vec<u8>) -> Vec<u8> {
-    value
-}
-
 impl JSONFormatter {
     fn start_key(&mut self, length: u32) {
         if !self.is_first_key_in_db {
