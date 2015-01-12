@@ -267,9 +267,28 @@ FF                          ## End of RDB file indicator
 </ul></li>
 <li>Read that many bytes from the stream, representing the score as an ASCII-encoded float. Use String-to-float conversion to get the actual double value.</li>
 </ul>
-<p><em>Note: Depending on the value you may loose precision. Redis saves the score as a double</em></p>
+<p><em>Note: Depending on the value you may loose precision. Redis saves the score as a double.</em></p>
+<p><em>Note: It’s not guaranteed that the set is sorted already.</em></p>
 <p><strong>Example:</strong></p>
-<pre><code>02</code></pre>
+<pre><code>04
+01 63 12 34 2E 30 31 39 39 39 39 39 39 39 39 39 39 39 39 39 36
+01 64 FE
+01 61 12 33 2E 31 38 39 39 39 39 39 39 39 39 39 39 39 39 39 39
+01 65 FF</code></pre>
+<ul>
+<li>First read the size of the sorted set: <code>04</code> = <code>4</code> (decimal)</li>
+<li>Next, read the first member, <a href="#string-encoding">string encoded</a>. It has a length of <code>01</code> = <code>1</code> (decimal). Read one byte: <code>63</code> = <code>c</code> (ASCII).</li>
+<li>Then read the next byte: <code>12</code> = <code>18</code> (decimal). This is the lenght of the following ASCII-encoded score.</li>
+<li>Read 18 bytes as ASCII values: <code>4.0199999999999996</code>. This could be parsed into a double value if necessary.</li>
+<li>Read one byte: <code>01</code> = <code>1</code>, the length of the next member. Read that byte: <code>64</code> = <code>d</code> (ASCII)</li>
+<li>Read one more byte: <code>FE</code> = <code>254</code> (decimal). This means the score is positive infinity.</li>
+<li>Read the next byte: <code>01</code>. Again, the length of the next member. Read that byte: <code>61</code> = <code>a</code>.</li>
+<li>Read the next byte: <code>12</code> = <code>18</code> (decimal). Read the next 18 bytes and interpret them as ASCII: <code>&quot;&quot;3.1899999999999999</code></li>
+<li>Read one byte: <code>01</code>. Again, the length of the next member. Read that byte: <code>65</code> = <code>e</code>.</li>
+<li>Read one more byte: <code>FF</code> = <code>255</code> (decimal). This means the score is negative infinity.</li>
+</ul>
+<p>The resulting sorted set will be:</p>
+<pre><code>{ &quot;e&quot; =&gt; &quot;-inf&quot;, &quot;a&quot; =&gt; &quot;3.189999999999999&quot;, &quot;c&quot; =&gt; &quot;4.0199999999999996&quot;, &quot;d&quot; =&gt; &quot;+inf&quot; }</code></pre>
 <h3 id="hash-encoding">Hash Encoding</h3>
 <ul>
 <li>First, the <code>size</code> of the hash is read from the stream using <a href="#length-encoding">Length Encoding</a></li>
