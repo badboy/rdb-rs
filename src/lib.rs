@@ -231,6 +231,14 @@ pub fn read_blob<R: Reader>(input: &mut R) -> Vec<u8> {
     }
 }
 
+fn read_ziplist_metadata<T: Reader>(input: &mut T) -> (u32, u32, u16) {
+    let zlbytes = input.read_le_u32().unwrap();
+    let zltail = input.read_le_u32().unwrap();
+    let zllen = input.read_le_u16().unwrap();
+
+    (zlbytes, zltail, zllen)
+}
+
 pub fn parse<R: Reader, F: RdbParseFormatter>(input: R, formatter: F) {
     let mut parser = RdbParser::new(input, formatter);
     parser.parse()
@@ -425,20 +433,11 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
         DataType::String(rawval)
     }
 
-    fn read_list_ziplist(&mut self, key: &[u8]) -> Vec<DataType> {
-        let ziplist = read_blob(&mut self.input);
-
-        let mut reader = MemReader::new(ziplist);
-
-        let _zlbytes = reader.read_le_u32().unwrap();
-        let _zltail = reader.read_le_u32().unwrap();
-        let zllen = reader.read_le_u16().unwrap();
+    fn read_ziplist_entries<T: Reader>(&mut self, reader: &mut T, key: &[u8], zllen: u16) -> Vec<DataType> {
         let mut list = Vec::with_capacity(zllen as usize);
 
-        self.formatter.start_list(key, zllen as u32, self.last_expiretime, None);
-
         for _ in range(0, zllen) {
-            let entry = self.read_ziplist_entry(&mut reader);
+            let entry = self.read_ziplist_entry(reader);
             match entry {
                 DataType::String(ref val) => {
                     self.formatter.list_element(key, val.as_slice());
@@ -450,9 +449,34 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
             }
             list.push(entry);
         }
+        list
+    }
+
+    fn read_list_ziplist(&mut self, key: &[u8]) -> Vec<DataType> {
+        let ziplist = read_blob(&mut self.input);
+
+        let mut reader = MemReader::new(ziplist);
+        let (_zlbytes, _zltail, zllen) = read_ziplist_metadata(&mut reader);
+
+        self.formatter.start_list(key, zllen as u32, self.last_expiretime, None);
+
+        let list = self.read_ziplist_entries(&mut reader, key, zllen);
 
         assert!(reader.read_byte().unwrap() == 0xFF);
         self.formatter.end_list(key);
+
+        list
+    }
+
+    fn read_quicklist_ziplist(&mut self, key: &[u8]) -> Vec<DataType> {
+        let ziplist = read_blob(&mut self.input);
+
+        let mut reader = MemReader::new(ziplist);
+        let (_zlbytes, _zltail, zllen) = read_ziplist_metadata(&mut reader);
+
+        let list = self.read_ziplist_entries(&mut reader, key, zllen);
+
+        assert!(reader.read_byte().unwrap() == 0xFF);
 
         list
     }
@@ -551,7 +575,7 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
         self.formatter.start_set(key, 0, self.last_expiretime, None);
         let mut list = vec![];
         for _ in range(0, len) {
-            let zl = self.read_list_ziplist(key);
+            let zl = self.read_quicklist_ziplist(key);
             list.push_all(zl.as_slice());
         }
         self.formatter.end_set(key);
