@@ -439,8 +439,29 @@ FF FF 7F 0A D0 FF FF 00 00 06 C0 FC 3F 04 C0 3F 00 FF ...</code></pre>
 </ul>
 <p>A complete list needs to be constructed from all elements of all ziplists.</p>
 <p><strong>Example</strong>:</p>
-<pre><code>01 00 0e 09 71 75 ...</code></pre>
-<p><em>TODO: proper example</em></p>
+<pre><code>01 1F 1F 00 00 00 17 00 00 00 02 00 00 0B 6F 6E 65 2D 65 6C 65 6D 65 6E 74 0D 05 65 6C 65 6D 32 FF</code></pre>
+<ul>
+<li>Start by reading the first byte in order to get the list length in <a href="#length-encoding">length-encoding</a>. In this case it is <code>01</code>, so the list contains just one node.</li>
+<li>What follows is a ziplist containing all elements for this node.</li>
+<li>Proceed by reading the ziplist as specified in <a href="#ziplist-encoding">Ziplist Encoding</a>.</li>
+<li>Read the blob, <a href="#string-encoding">string-encoded</a></li>
+<li>For this read the length, <code>0x1F</code>, so 31 bytes up to and including <code>FF</code></li>
+<li>Read these 31 bytes.</li>
+<li>Read the number of bytes of the ziplist as a 32 bit unsigned integer: <code>1F 00 00 00</code> = <code>31</code> (decimal).</li>
+<li>Read the tail offset as a 32 bit unsigned integer: <code>17 00 00 00</code> = <code>23</code> (decimal). It’s zero-based, so this points to <code>0D 05 65 6C ...</code></li>
+<li>Read the length of the ziplist as a 16 bit unsigned integer: <code>02 00</code> = <code>2</code> (decimal).</li>
+<li>Now read two ziplist entries as follows:</li>
+<li>Read the next byte: <code>00</code>, as this is the first item and has no predecessors item.</li>
+<li>Read the next byte: <code>0B</code> = <code>11</code> (decimal). As this starts with the bit pattern <code>00</code> it is treated as the length.</li>
+<li>Read 11 bytes from the stream: <code>6F 6E 65 2D 65 6C 65 6D 65 6E 74</code> = <code>&quot;one-element&quot;</code> (ASCII)</li>
+<li>This is the first element.</li>
+<li>Proceed with the second item.</li>
+<li>Read one byte: <code>0D</code> = <code>13</code> (decimal). This is the length of the previous item (length of 11 + flag + prev-length)</li>
+<li>Read the next byte: <code>05</code>. This is the size of the following string.</li>
+<li>Read the next 5 bytes: <code>65 6C 65 6D 32</code> = <code>elem2</code>. This is the second list element.</li>
+<li>Read the next byte: <code>FF</code>. This marks the end of the ziplist (as we read 2 elements as determined before)</li>
+<li>Thus, the Quicklist stores the list <code>[&quot;one-element&quot;, &quot;elem2&quot;]</code>.</li>
+</ul>
 <h2 id="crc64-checksum">CRC64 Checksum</h2>
 <p>Starting with RDB Version 5, an 8 byte CRC64 checksum is added to the end of the file. It is possible to disable this checksum via a parameter in redis.conf. When the checksum is disabled, this field will have zeroes.</p>
 </div>
