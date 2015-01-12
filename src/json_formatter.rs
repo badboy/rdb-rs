@@ -2,6 +2,8 @@
 
 use formatter::RdbParseFormatter;
 use std::io;
+use std::str;
+use serialize::json;
 
 pub struct JSONFormatter {
     out: Box<Writer+'static>,
@@ -26,6 +28,11 @@ impl JSONFormatter {
     }
 }
 
+fn encode_to_ascii(value: &[u8]) -> String {
+    let s = unsafe{str::from_utf8_unchecked(value)};
+    json::encode(&s)
+}
+
 impl JSONFormatter {
     fn start_key(&mut self, length: u32) {
         if !self.is_first_key_in_db {
@@ -47,14 +54,10 @@ impl JSONFormatter {
     }
 
     fn write_key(&mut self, key: &[u8]) {
-        self.out.write_str("\"");
-        self.out.write(key);
-        self.out.write_str("\"");
+        self.out.write(encode_to_ascii(key).as_bytes());
     }
     fn write_value(&mut self, value: &[u8]) {
-        self.out.write_str("\"");
-        self.out.write(value);
-        self.out.write_str("\"");
+        self.out.write(encode_to_ascii(value).as_bytes());
     }
 }
 
@@ -83,9 +86,9 @@ impl RdbParseFormatter for JSONFormatter {
 
     fn set(&mut self, key: &[u8], value: &[u8], _expiry: Option<u64>) {
         self.start_key(0);
-        self.write_key(key.as_slice());
+        self.write_key(key);
         self.out.write_str(":");
-        self.write_key(value.as_slice());
+        self.write_value(value);
     }
 
     fn start_hash(&mut self, key: &[u8], length: u32,

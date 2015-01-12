@@ -75,6 +75,8 @@
 #![allow(unstable)]
 
 extern crate lzf;
+extern crate serialize;
+
 use std::str;
 use lzf::decompress;
 use std::io::MemReader;
