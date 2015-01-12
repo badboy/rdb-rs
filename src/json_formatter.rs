@@ -94,7 +94,7 @@ impl RdbParseFormatter for JSONFormatter {
     fn start_hash(&mut self, key: &[u8], length: u32,
                   _expiry: Option<u64>, _info: Option<()>) {
         self.start_key(length);
-        self.write_key(key.as_slice());
+        self.write_key(key);
         self.out.write_str(":{");
         self.out.flush();
     }
@@ -105,9 +105,9 @@ impl RdbParseFormatter for JSONFormatter {
     }
     fn hash_element(&mut self, _key: &[u8], field: &[u8], value: &[u8]) {
         self.write_comma();
-        self.write_key(field.as_slice());
+        self.write_key(field);
         self.out.write_str(":");
-        self.write_value(value.as_slice());
+        self.write_value(value);
         self.out.flush();
     }
 
@@ -125,14 +125,14 @@ impl RdbParseFormatter for JSONFormatter {
     }
     fn set_element(&mut self, _key: &[u8], member: &[u8]) {
         self.write_comma();
-        self.write_value(member.as_slice());
+        self.write_value(member);
     }
 
 
     fn start_list(&mut self, key: &[u8], length: u32,
                   _expiry: Option<u64>, _info: Option<()>) {
         self.start_key(length);
-        self.write_key(key.as_slice());
+        self.write_key(key);
         self.out.write_str(":[");
     }
     fn end_list(&mut self, _key: &[u8]) {
@@ -141,13 +141,13 @@ impl RdbParseFormatter for JSONFormatter {
     }
     fn list_element(&mut self, _key: &[u8], value: &[u8]) {
         self.write_comma();
-        self.write_value(value.as_slice());
+        self.write_value(value);
     }
 
     fn start_sorted_set(&mut self, key: &[u8], length: u32,
                         _expiry: Option<u64>, _info: Option<()>) {
         self.start_key(length);
-        self.write_key(key.as_slice());
+        self.write_key(key);
         self.out.write_str(":{");
     }
     fn end_sorted_set(&mut self, _key: &[u8]) {
@@ -157,9 +157,9 @@ impl RdbParseFormatter for JSONFormatter {
     fn sorted_set_element(&mut self, _key: &[u8],
                           score: f64, member: &[u8]) {
         self.write_comma();
-        self.write_key(member.as_slice());
+        self.write_key(member);
         self.out.write_str(":");
-        self.out.write_str(score.to_string().as_slice());
+        self.write_value(score.to_string().as_bytes());
     }
 
 }
