@@ -445,11 +445,29 @@ A complete list needs to be constructed from all elements of all ziplists.
 **Example**:
 
 ```
-01 00 0e 09 71 75 ...
+01 1F 1F 00 00 00 17 00 00 00 02 00 00 0B 6F 6E 65 2D 65 6C 65 6D 65 6E 74 0D 05 65 6C 65 6D 32 FF
 ```
 
-*TODO: proper example*
-
+* Start by reading the first byte in order to get the list length in [length-encoding](#length-encoding). In this case it is `01`, so the list contains just one node.
+* What follows is a ziplist containing all elements for this node.
+* Proceed by reading the ziplist as specified in [Ziplist Encoding](#ziplist-encoding).
+* Read the blob, [string-encoded](#string-encoding)
+* For this read the length, `0x1F`, so 31 bytes up to and including `FF`
+* Read these 31 bytes.
+* Read the number of bytes of the ziplist as a 32 bit unsigned integer: `1F 00 00 00` = `31` (decimal).
+* Read the tail offset as a 32 bit unsigned integer: `17 00 00 00` = `23` (decimal). It's zero-based, so this points to `0D 05 65 6C ...`
+* Read the length of the ziplist as a 16 bit unsigned integer: `02 00` = `2` (decimal).
+* Now read two ziplist entries as follows:
+* Read the next byte: `00`, as this is the first item and has no predecessors item.
+* Read the next byte: `0B` = `11` (decimal). As this starts with the bit pattern `00` it is treated as the length.
+* Read 11 bytes from the stream: `6F 6E 65 2D 65 6C 65 6D 65 6E 74` = `"one-element"` (ASCII)
+* This is the first element.
+* Proceed with the second item.
+* Read one byte: `0D` = `13` (decimal). This is the length of the previous item (length of 11 + flag + prev-length)
+* Read the next byte: `05`. This is the size of the following string.
+* Read the next 5 bytes: `65 6C 65 6D 32` = `elem2`. This is the second list element.
+* Read the next byte: `FF`. This marks the end of the ziplist (as we read 2 elements as determined before)
+* Thus, the Quicklist stores the list `["one-element", "elem2"]`.
 
 ## CRC64 Checksum
 
