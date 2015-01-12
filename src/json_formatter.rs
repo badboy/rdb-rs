@@ -40,7 +40,7 @@ impl JSONFormatter {
     fn end_key(&mut self) { }
 
     fn write_comma(&mut self) {
-        if self.element_index > 0 && self.element_index < self.elements_in_key {
+        if self.element_index > 0 {
             self.out.write_str(",");
         }
         self.element_index += 1;
@@ -72,7 +72,7 @@ impl RdbParseFormatter for JSONFormatter {
 
     fn start_database(&mut self, _db_number: u32) {
         if !self.is_first_db {
-            self.out.write_str("}");
+            self.out.write_str("},");
         }
 
         self.out.write_str("{");
