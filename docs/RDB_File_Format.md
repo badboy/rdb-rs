@@ -233,12 +233,35 @@ Sets are encoded exactly like lists.
     * `255`: negative infinity. Don't read additional bytes
 * Read that many bytes from the stream, representing the score as an ASCII-encoded float. Use String-to-float conversion to get the actual double value.
 
-*Note: Depending on the value you may loose precision. Redis saves the score as a double*
+*Note: Depending on the value you may loose precision. Redis saves the score as a double.*
+
+*Note: It's not guaranteed that the set is sorted already.*
 
 **Example:**
 
 ```
-02
+04
+01 63 12 34 2E 30 31 39 39 39 39 39 39 39 39 39 39 39 39 39 36
+01 64 FE
+01 61 12 33 2E 31 38 39 39 39 39 39 39 39 39 39 39 39 39 39 39
+01 65 FF
+```
+
+* First read the size of the sorted set: `04` = `4` (decimal)
+* Next, read the first member, [string encoded](#string-encoding). It has a length of `01` = `1` (decimal). Read one byte: `63` = `c` (ASCII).
+* Then read the next byte: `12` = `18` (decimal). This is the lenght of the following ASCII-encoded score.
+* Read 18 bytes as ASCII values: `4.0199999999999996`. This could be parsed into a double value if necessary.
+* Read one byte: `01` = `1`, the length of the next member.  Read that byte: `64` = `d` (ASCII)
+* Read one more byte: `FE` = `254` (decimal). This means the score is positive infinity.
+* Read the next byte: `01`. Again, the length of the next member. Read that byte: `61` = `a`.
+* Read the next byte: `12` = `18` (decimal). Read the next 18 bytes and interpret them as ASCII: `""3.1899999999999999`
+* Read one byte: `01`. Again, the length of the next member. Read that byte: `65` = `e`.
+* Read one more byte: `FF` = `255` (decimal). This means the score is negative infinity.
+
+The resulting sorted set will be:
+
+```
+{ "e" => "-inf", "a" => "3.189999999999999", "c" => "4.0199999999999996", "d" => "+inf" }
 ```
 
 ### Hash Encoding
