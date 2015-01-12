@@ -98,11 +98,13 @@ impl RdbParseFormatter for JSONFormatter {
         self.out.write_str(":{");
         self.out.flush();
     }
+
     fn end_hash(&mut self, _key: &[u8]) {
         self.end_key();
         self.out.write_str("}");
         self.out.flush();
     }
+
     fn hash_element(&mut self, _key: &[u8], field: &[u8], value: &[u8]) {
         self.write_comma();
         self.write_key(field);
@@ -111,7 +113,6 @@ impl RdbParseFormatter for JSONFormatter {
         self.out.flush();
     }
 
-
     fn start_set(&mut self, key: &[u8], cardinality: u32,
                  _expiry: Option<u64>, _info: Option<()>) {
         self.start_key(cardinality);
@@ -119,15 +120,16 @@ impl RdbParseFormatter for JSONFormatter {
         self.out.write_str(":[");
         self.out.flush();
     }
+
     fn end_set(&mut self, _key: &[u8]) {
         self.end_key();
         self.out.write_str("]");
     }
+
     fn set_element(&mut self, _key: &[u8], member: &[u8]) {
         self.write_comma();
         self.write_value(member);
     }
-
 
     fn start_list(&mut self, key: &[u8], length: u32,
                   _expiry: Option<u64>, _info: Option<()>) {
@@ -135,10 +137,12 @@ impl RdbParseFormatter for JSONFormatter {
         self.write_key(key);
         self.out.write_str(":[");
     }
+
     fn end_list(&mut self, _key: &[u8]) {
         self.end_key();
         self.out.write_str("]");
     }
+
     fn list_element(&mut self, _key: &[u8], value: &[u8]) {
         self.write_comma();
         self.write_value(value);
@@ -150,10 +154,12 @@ impl RdbParseFormatter for JSONFormatter {
         self.write_key(key);
         self.out.write_str(":{");
     }
+
     fn end_sorted_set(&mut self, _key: &[u8]) {
         self.end_key();
         self.out.write_str("}");
     }
+
     fn sorted_set_element(&mut self, _key: &[u8],
                           score: f64, member: &[u8]) {
         self.write_comma();
