@@ -5,7 +5,7 @@ version = "0.0.1"
 authors = ["Jan-Erik Rediger <badboy@archlinux.us>"]
 
 [[bin]]
-name = "rdb-parser"
+name = "rdb"
 path = "src/main.rs"
 doc  = false
 
