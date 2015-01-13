@@ -23,7 +23,6 @@
 //! ```rust,no_run
 //! # #![allow(unstable)]
 //! # use std::io::{BufferedReader, File};
-//!
 //! let file = File::open(&Path::new("dump.rdb"));
 //! let reader = BufferedReader::new(file);
 //! rdb::parse(reader, rdb::JSONFormatter::new())
