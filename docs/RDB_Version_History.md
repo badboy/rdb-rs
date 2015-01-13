@@ -1,4 +1,5 @@
 % RDB Version History
+## RDB Version History
 
 This document tracks the changes made to the dump file format over time.
 

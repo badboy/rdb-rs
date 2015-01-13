@@ -1,4 +1,5 @@
-% Redis RDB File Format
+% RDB File Format
+## Redis RDB File Format
 
 Redis' RDB file is a binary representation of the in-memory store. This binary file is sufficient to completely restore Redis' state.
 
