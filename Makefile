@@ -5,3 +5,9 @@ dump-test:
 
 unit-test:
 	cargo test
+
+www:
+	make -C www
+
+www-upload:
+	make -C www upload
