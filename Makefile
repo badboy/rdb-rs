@@ -16,6 +16,7 @@ doc:
 	cargo doc
 
 doc-upload: doc
-	rsync -av target/doc rediger:/var/www/sites/rdb.fnordig.de/
+	rsync -rltgoDv target/doc rediger:/var/www/sites/rdb.fnordig.de/
+	ssh rediger 'chmod -R o+r /var/www/sites/rdb.fnordig.de/doc && find /var/www/sites/rdb.fnordig.de/doc -type d -exec chmod o+x {} \;'
 
 .PHONY: www
