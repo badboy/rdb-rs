@@ -1,10 +1,10 @@
 all: file_format.html version_history.html index.html
 
-file_format.html: RDB_File_Format.md tmpl.html
-	pandoc -S --toc -c style.css -o file_format.html --template tmpl.html RDB_File_Format.md
+file_format.html: ../docs/RDB_File_Format.md tmpl.html
+	pandoc -S --toc -c style.css -o file_format.html --template tmpl.html ../docs/RDB_File_Format.md
 
-version_history.html: RDB_Version_History.md tmpl.html
-	pandoc -S --toc -c style.css -o version_history.html --template tmpl.html RDB_Version_History.md
+version_history.html: ../docs/RDB_Version_History.md tmpl.html
+	pandoc -S --toc -c style.css -o version_history.html --template tmpl.html ../docs/RDB_Version_History.md
 
 index.html: index.md header.html footer.html
 	 cat header.html > index.html
