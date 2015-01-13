@@ -1,3 +1,5 @@
+# rdb-rs - fast and efficient RDB parsing utility
+
 ## Introduction
 
 > [Redis](http://redis.io) is an open source, BSD licensed, advanced key-value cache and store. It is often referred to as a data structure server since keys can contain strings, hashes, lists, sets, sorted sets, bitmaps and hyperloglogs.
@@ -7,6 +9,8 @@ Redis’ RDB file is a binary representation of the in-memory store. This binary
 Optimizing for fast read/writes means the on-disk format should be as close as possible to the in-memory representation. This is the approach taken by the RDB file. As a consequence, you cannot parse the RDB file without some understanding of Redis’ in-memory representation of data structures.
 
 `rdb-rs` is a library and tool to parse RDB and dump it into another format like JSON or the [Redis protocol](http://redis.io/topics/protocol).
+
+It is based on Sripathi Krishnan's [redis-rdb-tools](https://github.com/sripathikrishnan/redis-rdb-tools) and compatible with the latest Redis RDB version 7.
 
 ## Getting started
 

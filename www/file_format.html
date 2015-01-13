@@ -2,13 +2,14 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Redis RDB File Format</title>
+  <title>RDB File Format</title>
   <link rel="stylesheet" href="style.css" type="text/css" />
 </head>
 <body>
 <div id="TOC">
-<h1 class="title">Redis RDB File Format</h1>
+<h1 class="title">RDB File Format</h1>
 <ul>
+<li><a href="#redis-rdb-file-format">Redis RDB File Format</a></li>
 <li><a href="#high-level-algorithm-to-parse-rdb">High Level Algorithm to parse RDB</a></li>
 <li><a href="#magic-number">Magic Number</a></li>
 <li><a href="#rdb-version-number">RDB Version Number</a></li>
@@ -40,6 +41,7 @@
 </ul>
 </div>
 <div class="content">
+<h2 id="redis-rdb-file-format">Redis RDB File Format</h2>
 <p>Redis’ RDB file is a binary representation of the in-memory store. This binary file is sufficient to completely restore Redis’ state.</p>
 <p>The RDB file format is optimized for fast read and writes. Where possible LZF compression is used to reduce the file size. In general, objects are prefixed with their lengths, so before reading the object you know exactly how much memory to allocate.</p>
 <p>Optimizing for fast read/writes means the on-disk format should be as close as possible to the in-memory representation. This is the approach taken by the RDB file. As a consequence, you cannot parse the RDB file without some understanding of Redis’ in-memory representation of data structures.</p>
