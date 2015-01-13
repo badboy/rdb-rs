@@ -85,6 +85,10 @@ and
 [RDB_Version_History.textile](https://github.com/sripathikrishnan/redis-rdb-tools/blob/d39c8e5127daf3e109c0f0e101af8ed0e5400493/docs/RDB_Version_History.textile).
 Thanks to Sripathi Krishnan and his work on the [redis-rdb-tools](https://github.com/sripathikrishnan/redis-rdb-tools).
 
+### Crate documentation
+
+The full code documentation is available [online](http://rdb.fnordig.de/doc/rdb/).
+
 ### Included documentation
 
 * [File Format](file_format.html)

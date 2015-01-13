@@ -7,7 +7,15 @@ unit-test:
 	cargo test
 
 www:
-	make -C www
+	$(MAKE) -C www
 
 www-upload:
-	make -C www upload
+	$(MAKE) -C www upload
+
+doc:
+	cargo doc
+
+doc-upload: doc
+	rsync -av target/doc rediger:/var/www/sites/rdb.fnordig.de/
+
+.PHONY: www
