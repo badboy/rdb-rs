@@ -7,28 +7,93 @@
   </head>
   <body>
     <div id="TOC">
-      <h1 class="title">Redis RDB File Format</h1>
+      <h1 class="title">rdb-rs</h1>
+
+      <a href="">Download v0.1.0</a>
+
+      <ul>
+        <li><a href="#introduction">Introduction</a></li>
+        <li>
+          <a href="#getting-started">Getting started</a>
+          <ul>
+            <li><a href="#command-line-tool">Command-line tool</a></li>
+            <li><a href="#library">Library</a></li>
+          </ul>
+        </li>
+        <li><a href="#code">Code</a></li>
+        <li><a href="#documentation">Documentation</a></li>
+      </ul>
+
+      <h2>RDB documentation</h2>
       <ul>
         <li><a href="file_format.html">File Format</a></li>
         <li><a href="version_history.html">Version History</a></li>
       </ul>
     </div>
-    <div class="content">
-      <blockquote>
-        <a href="http://redis.io">Redis</a> is an open source, BSD licensed, advanced key-value cache and store. It is often referred to as a data structure server since keys can contain strings, hashes, lists, sets, sorted sets, bitmaps and hyperloglogs.
-      </blockquote>
-      <p>Redis’ RDB file is a binary representation of the in-memory store. This binary file is sufficient to completely restore Redis’ state.</p>
-      <p>Optimizing for fast read/writes means the on-disk format should be as close as possible to the in-memory representation. This is the approach taken by the RDB file. As a consequence, you cannot parse the RDB file without some understanding of Redis’ in-memory representation of data structures.</p>
+    <div class="content index">
+<h2 id="introduction">Introduction</h2>
+<blockquote>
+<p><a href="http://redis.io">Redis</a> is an open source, BSD licensed, advanced key-value cache and store. It is often referred to as a data structure server since keys can contain strings, hashes, lists, sets, sorted sets, bitmaps and hyperloglogs.</p>
+</blockquote>
+<p>Redis’ RDB file is a binary representation of the in-memory store. This binary file is sufficient to completely restore Redis’ state.</p>
+<p>Optimizing for fast read/writes means the on-disk format should be as close as possible to the in-memory representation. This is the approach taken by the RDB file. As a consequence, you cannot parse the RDB file without some understanding of Redis’ in-memory representation of data structures.</p>
+<p><code>rdb-rs</code> is a library and tool to parse RDB and dump it into another format like JSON or the <a href="http://redis.io/topics/protocol">Redis protocol</a>.</p>
+<h2 id="getting-started">Getting started</h2>
+<p><code>rdb-rs</code> is offered both as a library and as a stand-alone command line tool.</p>
+<h3 id="command-line-tool">Command-line tool</h3>
+<p>The command line tool can be used to dump an existing RDB file in one of the provided formats:</p>
+<pre class="sourceCode bash"><code class="sourceCode bash"><span class="kw">rdb</span> --format json dump.rdb
+<span class="co"># [{&quot;key&quot;:&quot;value&quot;}]</span>
+<span class="kw">rdb</span> --format protocol dump.rdb
+<span class="co"># *2</span>
+<span class="co"># $6</span>
+<span class="co"># SELECT</span>
+<span class="co"># $1</span>
+<span class="co"># 0</span>
+<span class="co"># *3</span>
+<span class="co"># $3</span>
+<span class="co"># SET</span>
+<span class="co"># $3</span>
+<span class="co"># key</span>
+<span class="co"># $5</span>
+<span class="co"># value</span></code></pre>
+<p>See the help output for more info how to use it:</p>
+<pre class="sourceCode bash"><code class="sourceCode bash"><span class="kw">rdb</span> --help
+<span class="co"># Usage: rdb [options] dump.rdb</span>
+<span class="co">#</span>
+<span class="co"># Options:</span>
+<span class="co">#     -f --format FORMAT  Format to output. Valid: json, plain, nil, protocol</span>
+<span class="co">#     -h --help           print this help menu</span>
+<span class="co">#</span></code></pre>
+<h3 id="library">Library</h3>
+<p>Using the library is as easy as calling the <code>rdb::parse</code> function and pass it a stream to read from and a formatter to use.</p>
+<pre class="sourceCode rust"><code class="sourceCode rust"><span class="kw">use</span> std::io::{BufferedReader, File};
 
-      <hr>
-      <p>
-        This documentation is largely based on 
-        <a href="https://github.com/sripathikrishnan/redis-rdb-tools/blob/d39c8e5127daf3e109c0f0e101af8ed0e5400493/docs/RDB_File_Format.textile">RDB_File_Format.textile</a>
-        and 
-        <a href="https://github.com/sripathikrishnan/redis-rdb-tools/blob/d39c8e5127daf3e109c0f0e101af8ed0e5400493/docs/RDB_Version_History.textile">RDB_Version_History.textile</a>
-      </p>
-      <p>Thanks to Sripathi Krishnan and his work on a the
-      <a href="https://github.com/sripathikrishnan/redis-rdb-tools">redis-rdb-tools</a>, a Python tool to parse, analyze and dump RDB files.</p>
+<span class="kw">let</span> file = File::open(&amp;Path::new(<span class="st">&quot;dump.rdb&quot;</span>));
+<span class="kw">let</span> reader = BufferedReader::new(file);
+rdb::parse(reader, rdb::JSONFormatter::new());</code></pre>
+<p><code>rdb-rs</code> brings 4 pre-defined formatters, which can be used:</p>
+<ul>
+<li><code>PlainFormatter</code>: Just plain output for testing</li>
+<li><code>JSONFormatter</code>: JSON-encoded output</li>
+<li><code>NilFormatter</code>: Surpresses all output</li>
+<li><code>ProtocolFormatter</code>: Formats the data in <a href="http://redis.io/topics/protocol">RESP</a>, the Redis Serialization Protocol</li>
+</ul>
+<p>It's easy to build your own formatter. All you need to do is implementing the <code>RdbParseFormatter</code> trait.</p>
+<h2 id="code">Code</h2>
+<p>The code is available on GitHub: <a href="https://github.com/badboy/rdb-rs">github.com/badboy/rdb-rs</a>.<br />Submit bugs, requests and improvements to the <a href="https://github.com/badboy/rdb-rs/issues">issue tracker</a>. You can also contact me via <script type="text/javascript">
+<!--
+h='&#102;&#110;&#x6f;&#114;&#100;&#x69;&#x67;&#46;&#100;&#x65;';a='&#64;';n='&#114;&#100;&#98;&#x2d;&#114;&#x73;';e=n+a+h;
+document.write('<a h'+'ref'+'="ma'+'ilto'+':'+e+'" clas'+'s="em' + 'ail">'+'email'+'<\/'+'a'+'>');
+// -->
+</script><noscript>&#x65;&#x6d;&#x61;&#x69;&#108;&#32;&#40;&#114;&#100;&#98;&#x2d;&#114;&#x73;&#32;&#x61;&#116;&#32;&#102;&#110;&#x6f;&#114;&#100;&#x69;&#x67;&#32;&#100;&#x6f;&#116;&#32;&#100;&#x65;&#x29;</noscript> or <a href="https://twitter.com/badboy_">twitter</a>.</p>
+<h2 id="documentation">Documentation</h2>
+<p>The included documentation of the RDB format is largely based on <a href="https://github.com/sripathikrishnan/redis-rdb-tools/blob/d39c8e5127daf3e109c0f0e101af8ed0e5400493/docs/RDB_File_Format.textile">RDB_File_Format.textile</a> and <a href="https://github.com/sripathikrishnan/redis-rdb-tools/blob/d39c8e5127daf3e109c0f0e101af8ed0e5400493/docs/RDB_Version_History.textile">RDB_Version_History.textile</a>. Thanks to Sripathi Krishnan and his work on the <a href="https://github.com/sripathikrishnan/redis-rdb-tools">redis-rdb-tools</a>.</p>
+<h3 id="included-documentation">Included documentation</h3>
+<ul>
+<li><a href="file_format.html">File Format</a></li>
+<li><a href="version_history.html">Version History</a></li>
+</ul>
     </div>
     <div class="footer">
       Copyright © 2015 Jan-Erik Rediger, released under the MIT license |
