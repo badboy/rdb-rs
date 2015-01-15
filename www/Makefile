@@ -11,5 +11,5 @@ index.html: index.md header.html footer.html
 	 pandoc -t html index.md >> index.html
 	 cat footer.html >> index.html
 
-upload: version_history.html file_format.html
+upload: version_history.html file_format.html index.html
 	rsync -av file_format.html version_history.html index.html style.css rediger:/var/www/sites/rdb.fnordig.de/
