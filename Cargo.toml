@@ -12,4 +12,5 @@ doc  = false
 [dependencies]
 lzf = "*"
 getopts = "*"
+rustc-serialize = "*"
 regex = "*"
