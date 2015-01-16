@@ -75,10 +75,12 @@
 
 extern crate lzf;
 extern crate serialize;
+extern crate regex;
 
 use std::str;
 use lzf::decompress;
 use std::io::MemReader;
+use regex::Regex;
 
 pub use formatter::RdbParseFormatter;
 pub use nil_formatter::NilFormatter;
@@ -136,6 +138,28 @@ mod encoding {
     pub const LZF : u32 = 3;
 }
 
+#[derive(Copy,PartialEq)]
+pub enum Type {
+    String,
+    List,
+    Set,
+    SortedSet,
+    Hash
+}
+
+impl Type {
+    fn from_encoding(enc_type: u8) -> Type {
+        match enc_type {
+            types::STRING => Type::String,
+            types::HASH | types::HASH_ZIPMAP | types::HASH_ZIPLIST => Type::Hash,
+            types::LIST | types::LIST_ZIPLIST => Type::List,
+            types::SET | types::SET_INTSET => Type::Set,
+            types::ZSET | types::ZSET_ZIPLIST => Type::SortedSet,
+            _ => { panic!("Unknown encoding type: {}", enc_type) }
+        }
+    }
+}
+
 #[derive(Show,Clone)]
 pub enum DataType {
     String(Vec<u8>),
@@ -151,9 +175,74 @@ pub enum DataType {
     Unknown
 }
 
-pub struct RdbParser<R: Reader, F: RdbParseFormatter> {
+pub trait RdbFilter {
+    fn matches_db(&self, _db: u32) -> bool { true }
+    fn matches_type(&self, _enc_type: u8) -> bool { true }
+    fn matches_key(&self, _key: &[u8]) -> bool { true }
+
+}
+
+#[derive(Copy)]
+pub struct AllFilter;
+impl RdbFilter for AllFilter {}
+
+pub struct StrictFilter {
+    databases: Vec<u32>,
+    types: Vec<Type>,
+    keys: Option<Regex>
+}
+
+impl StrictFilter {
+    pub fn new() -> StrictFilter {
+        StrictFilter { databases: vec![], types: vec![], keys: None }
+    }
+
+    pub fn add_database(&mut self, db: u32) {
+        self.databases.push(db);
+    }
+
+    pub fn add_type(&mut self, typ: Type) {
+        self.types.push(typ);
+    }
+
+    pub fn add_keys(&mut self, re: Regex) {
+        self.keys = Some(re);
+    }
+}
+
+impl RdbFilter for StrictFilter {
+    fn matches_db(&self, db: u32) -> bool {
+        if self.databases.is_empty() {
+            true
+        } else {
+            self.databases.iter().any(|&x| x == db)
+        }
+    }
+
+    fn matches_type(&self, enc_type: u8) -> bool {
+        if self.types.is_empty() {
+            return true
+        }
+
+        let typ = Type::from_encoding(enc_type);
+        self.types.iter().any(|&x| x == typ)
+    }
+
+    fn matches_key(&self, key: &[u8]) -> bool {
+        match self.keys.clone() {
+            None => true,
+            Some(re) => {
+                let key = unsafe{str::from_utf8_unchecked(key)};
+                re.is_match(key)
+            }
+        }
+    }
+}
+
+pub struct RdbParser<R: Reader, F: RdbParseFormatter, L: RdbFilter> {
     input: R,
     formatter: F,
+    filter: L,
     last_expiretime: Option<u64>
 }
 
@@ -240,14 +329,19 @@ fn read_ziplist_metadata<T: Reader>(input: &mut T) -> (u32, u32, u16) {
     (zlbytes, zltail, zllen)
 }
 
-pub fn parse<R: Reader, F: RdbParseFormatter>(input: R, formatter: F) {
-    let mut parser = RdbParser::new(input, formatter);
+pub fn parse<R: Reader, F: RdbParseFormatter, T: RdbFilter>(input: R, formatter: F, filter: T) {
+    let mut parser = RdbParser::new(input, formatter, filter);
     parser.parse()
 }
 
-impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
-    pub fn new(input: R, formatter: F) -> RdbParser<R, F> {
-        RdbParser{input: input, formatter: formatter, last_expiretime: None}
+impl<R: Reader, F: RdbParseFormatter, L: RdbFilter> RdbParser<R, F, L> {
+    pub fn new(input: R, formatter: F, filter: L) -> RdbParser<R, F, L> {
+        RdbParser{
+            input: input,
+            formatter: formatter,
+            filter: filter,
+            last_expiretime: None
+        }
     }
 
     pub fn parse(&mut self) {
@@ -263,7 +357,9 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
             match next_op {
                 op_codes::SELECTDB => {
                     last_database = read_length(&mut self.input);
-                    self.formatter.start_database(last_database);
+                    if self.filter.matches_db(last_database) {
+                        self.formatter.start_database(last_database);
+                    }
                 },
                 op_codes::EOF => {
                     self.formatter.end_database(last_database);
@@ -296,8 +392,18 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
                         auxval.as_slice());
                 },
                 _ => {
-                    let key = read_blob(&mut self.input);
-                    self.read_type(key.as_slice(), next_op);
+                    if self.filter.matches_db(last_database) {
+                        let key = read_blob(&mut self.input);
+
+                        if self.filter.matches_type(next_op) && self.filter.matches_key(key.as_slice()) {
+                            self.read_type(key.as_slice(), next_op);
+                        } else {
+                            self.skip_object(next_op);
+                        }
+                    } else {
+                        self.skip_key_and_object(next_op);
+                    }
+
                     self.last_expiretime = None;
                 }
             }
@@ -437,7 +543,7 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
     fn read_ziplist_entries<T: Reader>(&mut self, reader: &mut T, key: &[u8], zllen: u16) -> Vec<DataType> {
         let mut list = Vec::with_capacity(zllen as usize);
 
-        for _ in range(0, zllen) {
+        for _ in (0..zllen) {
             let entry = self.read_ziplist_entry(reader);
             match entry {
                 DataType::String(ref val) => {
@@ -551,7 +657,7 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
 
         self.formatter.start_set(key, intset_length, self.last_expiretime, None);
 
-        for _ in range(0, intset_length) {
+        for _ in (0..intset_length) {
             let val = match byte_size {
                 2 => reader.read_le_i16().unwrap() as i64,
                 4 => reader.read_le_i32().unwrap() as i64,
@@ -575,7 +681,7 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
         // Also: We can't call read_list_ziplist as is
         self.formatter.start_set(key, 0, self.last_expiretime, None);
         let mut list = vec![];
-        for _ in range(0, len) {
+        for _ in (0..len) {
             let zl = self.read_quicklist_ziplist(key);
             list.push_all(zl.as_slice());
         }
@@ -624,4 +730,53 @@ impl<R: Reader, F: RdbParseFormatter> RdbParser<R, F> {
         }
     }
 
+    fn skip(&mut self, skip_bytes: usize) {
+        let _ = self.input.read_exact(skip_bytes);
+    }
+
+    fn skip_blob(&mut self) {
+        let (len, is_encoded) = read_length_with_encoding(&mut self.input);
+        let mut skip_bytes;
+
+        if is_encoded {
+            skip_bytes = match len {
+                encoding::INT8 => 1,
+                encoding::INT16 => 2,
+                encoding::INT32 => 4,
+                encoding::LZF => {
+                    let compressed_length = read_length(&mut self.input);
+                    let _real_length = read_length(&mut self.input);
+                    compressed_length
+                },
+                _ => { panic!("Unknown encoding: {}", len) }
+            }
+        } else {
+            skip_bytes = len;
+        }
+
+        self.skip(skip_bytes as usize);
+    }
+
+    fn skip_object(&mut self, enc_type: u8) {
+        let blobs_to_skip = match enc_type {
+            types::STRING |
+                types::HASH_ZIPMAP |
+                types::LIST_ZIPLIST |
+                types::SET_INTSET |
+                types::ZSET_ZIPLIST |
+                types::HASH_ZIPLIST => 1,
+            types::LIST | types::SET => read_length(&mut self.input),
+            types::ZSET | types::HASH => read_length(&mut self.input) * 2,
+            _ => { panic!("Unknown encoding type: {}", enc_type) }
+        };
+
+        for _ in (0..blobs_to_skip) {
+            self.skip_blob()
+        }
+    }
+
+    fn skip_key_and_object(&mut self, enc_type: u8) {
+        self.skip_blob();
+        self.skip_object(enc_type);
+    }
 }

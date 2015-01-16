@@ -12,3 +12,4 @@ doc  = false
 [dependencies]
 lzf = "*"
 getopts = "*"
+regex = "*"

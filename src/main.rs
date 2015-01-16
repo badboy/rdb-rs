@@ -2,9 +2,11 @@
 #![feature(box_syntax)]
 extern crate rdb;
 extern crate getopts;
+extern crate regex;
 use std::os;
 use std::io::{BufferedReader, File};
 use getopts::{optopt,optflag,getopts,OptGroup,usage};
+use regex::Regex;
 
 fn print_usage(program: &str, opts: &[OptGroup]) {
     let brief = format!("Usage: {} [options] dump.rdb", program);
@@ -18,6 +20,9 @@ pub fn main() {
 
     let opts = &[
         optopt("f", "format", "Format to output. Valid: json, plain, nil, protocol", "FORMAT"),
+        optopt("k", "keys", "Keys to show. Can be a regular expression", "KEYS"),
+        optopt("d", "databases", "Database to show", "DB"),
+        optopt("t", "type", "Type to show", "TYPE"),
         optflag("h", "help", "print this help menu")
     ];
 
@@ -26,11 +31,39 @@ pub fn main() {
         Err(f) => { panic!(f.to_string())  }
     };
 
-    //let mut format : Box<rdb::RdbParseFormatter>;
-
     if matches.opt_present("h") {
          print_usage(program.as_slice(), opts);
          return;
+    }
+
+    let mut filter = rdb::StrictFilter::new();
+
+    if let Some(d) = matches.opt_str("d") {
+        filter.add_database(d.parse().unwrap());
+    }
+
+    if let Some(t) = matches.opt_str("t") {
+        let typ = match t.as_slice() {
+            "string" => rdb::Type::String,
+            "list" => rdb::Type::List,
+            "set" => rdb::Type::Set,
+            "sortedset" | "sorted-set" | "sorted_set" => rdb::Type::SortedSet,
+            "hash" => rdb::Type::Hash,
+            _ => {
+                println!("Unknown type: {}", t);
+                print_usage(program.as_slice(), opts);
+                return;
+            }
+        };
+        filter.add_type(typ);
+    }
+
+    if let Some(k) = matches.opt_str("k") {
+        let re = match Regex::new(k.as_slice()) {
+            Ok(re) => re,
+            Err(err) => panic!("{}", err)
+        };
+        filter.add_keys(re);
     }
 
 
@@ -45,16 +78,16 @@ pub fn main() {
 
         match f.as_slice() {
             "json" => {
-                rdb::parse(reader, rdb::JSONFormatter::new())
+                rdb::parse(reader, rdb::JSONFormatter::new(), filter)
             },
             "plain" => {
-                rdb::parse(reader, rdb::PlainFormatter::new())
+                rdb::parse(reader, rdb::PlainFormatter::new(), filter)
             },
             "nil" => {
-                rdb::parse(reader, rdb::NilFormatter::new())
+                rdb::parse(reader, rdb::NilFormatter::new(), filter)
             }
             "protocol" => {
-                rdb::parse(reader, rdb::ProtocolFormatter::new())
+                rdb::parse(reader, rdb::ProtocolFormatter::new(), filter)
             }
             _ => {
                 println!("Unknown format: {}", f);
@@ -72,6 +105,6 @@ pub fn main() {
         let path = matches.free[0].clone();
         let file = File::open(&Path::new(path));
         let reader = BufferedReader::new(file);
-        rdb::parse(reader, rdb::JSONFormatter::new())
+        rdb::parse(reader, rdb::JSONFormatter::new(), filter)
     }
 }
