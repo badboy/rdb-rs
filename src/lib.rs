@@ -25,7 +25,7 @@
 //! # use std::io::{BufferedReader, File};
 //! let file = File::open(&Path::new("dump.rdb"));
 //! let reader = BufferedReader::new(file);
-//! rdb::parse(reader, rdb::JSONFormatter::new())
+//! rdb::parse(reader, rdb::JSONFormatter::new(), rdb::AllFilter)
 //! ```
 //!
 //! # Formatter
