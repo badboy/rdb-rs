@@ -2,7 +2,7 @@ use std::str;
 use regex::Regex;
 use types::Type;
 
-pub trait RdbFilter {
+pub trait Filter {
     fn matches_db(&self, _db: u32) -> bool { true }
     fn matches_type(&self, _enc_type: u8) -> bool { true }
     fn matches_key(&self, _key: &[u8]) -> bool { true }
@@ -33,7 +33,7 @@ impl Simple {
     }
 }
 
-impl RdbFilter for Simple {
+impl Filter for Simple {
     fn matches_db(&self, db: u32) -> bool {
         if self.databases.is_empty() {
             true

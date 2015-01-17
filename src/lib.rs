@@ -90,8 +90,8 @@ use constants::{
     encoding
 };
 
-use formatter::RdbParseFormatter;
-use filter::RdbFilter;
+use formatter::Formatter;
+use filter::Filter;
 
 #[doc(hidden)]
 pub use types::{
@@ -120,7 +120,7 @@ pub enum ZiplistEntry {
     Number(i64),
 }
 
-pub struct RdbParser<R: Reader, F: RdbParseFormatter, L: RdbFilter> {
+pub struct RdbParser<R: Reader, F: Formatter, L: Filter> {
     input: R,
     formatter: F,
     filter: L,
@@ -232,12 +232,12 @@ fn read_ziplist_metadata<T: Reader>(input: &mut T) -> RdbResult<(u32, u32, u16)>
     Ok((zlbytes, zltail, zllen))
 }
 
-pub fn parse<R: Reader, F: RdbParseFormatter, T: RdbFilter>(input: R, formatter: F, filter: T) -> RdbOk {
+pub fn parse<R: Reader, F: Formatter, T: Filter>(input: R, formatter: F, filter: T) -> RdbOk {
     let mut parser = RdbParser::new(input, formatter, filter);
     parser.parse()
 }
 
-impl<R: Reader, F: RdbParseFormatter, L: RdbFilter> RdbParser<R, F, L> {
+impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
     pub fn new(input: R, formatter: F, filter: L) -> RdbParser<R, F, L> {
         RdbParser{
             input: input,
