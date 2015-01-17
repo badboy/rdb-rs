@@ -4,7 +4,7 @@ Inspired and based on [redis-rdb-tools][].
 
 ## Documentation
 
-Online at [rdb.fnordig.de/doc/rdb/](http://rdb.fnordig.de/doc/rdb/).
+Online at [rdb.fnordig.de/doc/rdb/][doc].
 
 
 ## Build
@@ -24,30 +24,27 @@ use std::io::{BufferedReader, File};
 
 let file = File::open(&Path::new("dump.rdb"));
 let reader = BufferedReader::new(file);
-rdb::parse(reader, rdb::JSONFormatter::new())
+rdb::parse(reader, rdb::formatter::JSON::new(), rdb::filter::Simple::new());
 ```
 
 ### Formatter
 
 rdb-rs brings 4 pre-defined formatters, which can be used:
 
-* `PlainFormatter`: Just plain output for testing
-* `JSONFormatter`: JSON-encoded output
-* `NilFormatter`: Surpresses all output
-* `ProtocolFormatter`: Formats the data in [RESP](http://redis.io/topics/protocol),
+* `Plain`: Just plain output for testing
+* `JSON`: JSON-encoded output
+* `Nil`: Surpresses all output
+* `Protocol`: Formats the data in [RESP][],
 the Redis Serialization Protocol
 
-These formatters adhere to the `RdbParseFormatter` trait
-and supply a method for each possible datatype or opcode.
-Its up to the formatter to correctly handle all provided data such as
-lists, sets, hashes, expires and metadata.
+These formatters adhere to the `Formatter` trait and supply a method for each possible datatype or opcode.
+Its up to the formatter to correctly handle all provided data such as lists, sets, hashes, expires and metadata.
 
 ### Command-line
 
 rdb-rs brings a Command Line application as well.
 
-This application will take a RDB file as input and format it in the specified format (JSON by
-default).
+This application will take a RDB file as input and format it in the specified format (JSON by default).
 
 Example:
 
@@ -79,10 +76,13 @@ cargo test
 
 ## Contribute
 
-If you find bugs or want to help otherwise, please [open an issue](https://github.com/badboy/rdb-rs/issues).
+If you find bugs or want to help otherwise, please [open an issue][issues].
 
 ## License
 
 BSD. See [LICENSE](LICENSE).
 
 [redis-rdb-tools]: https://github.com/sripathikrishnan/redis-rdb-tools
+[RESP]: http://redis.io/topics/protocol
+[issues]: https://github.com/badboy/rdb-rs/issues
+[doc]: http://rdb.fnordig.de/doc/rdb/

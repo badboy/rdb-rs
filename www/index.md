@@ -42,12 +42,14 @@ See the help output for more info how to use it:
 
 ```bash
 rdb --help
-# Usage: rdb [options] dump.rdb
+# Usage: target/rdb [options] dump.rdb
 #
 # Options:
 #     -f --format FORMAT  Format to output. Valid: json, plain, nil, protocol
+#     -k --keys KEYS      Keys to show. Can be a regular expression
+#     -d --databases DB   Database to show
+#     -t --type TYPE      Type to show
 #     -h --help           print this help menu
-#
 ```
 
 ### Library
@@ -59,17 +61,17 @@ use std::io::{BufferedReader, File};
 
 let file = File::open(&Path::new("dump.rdb"));
 let reader = BufferedReader::new(file);
-rdb::parse(reader, rdb::JSONFormatter::new());
+rdb::parse(reader, rdb::formatter::JSON::new(), rdb::filter::Simple::new());
 ```
 
 `rdb-rs` brings 4 pre-defined formatters, which can be used:
 
-* `PlainFormatter`: Just plain output for testing
-* `JSONFormatter`: JSON-encoded output
-* `NilFormatter`: Surpresses all output
-* `ProtocolFormatter`: Formats the data in [RESP](http://redis.io/topics/protocol), the Redis Serialization Protocol
+* `Plain`: Just plain output for testing
+* `JSON`: JSON-encoded output
+* `Nil`: Surpresses all output
+* `Protocol`: Formats the data in [RESP](http://redis.io/topics/protocol), the Redis Serialization Protocol
 
-It's easy to build your own formatter. All you need to do is implementing the `RdbParseFormatter` trait.
+It's easy to build your own formatter. All you need to do is implementing the `Formatter` trait.
 
 ## Code
 
