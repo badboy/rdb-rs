@@ -80,85 +80,45 @@ extern crate regex;
 use std::str;
 use lzf::decompress;
 use std::io::MemReader;
-use regex::Regex;
+
+use constants::{
+    version,
+    constant,
+    op_code,
+    encoding_type,
+    encoding
+};
 
 pub use formatter::RdbParseFormatter;
 pub use nil_formatter::NilFormatter;
 pub use plain_formatter::PlainFormatter;
 pub use json_formatter::JSONFormatter;
 pub use protocol_formatter::ProtocolFormatter;
+pub use filter::{RdbFilter,StrictFilter};
 
+#[doc(hidden)]
+pub use types::{
+    /* low level values */
+    Value,
+
+    /* error and result types */
+    RdbError,
+    RdbResult,
+
+    Type,
+};
+
+mod macros;
+mod constants;
 mod helper;
+mod types;
+mod filter;
 
-pub mod formatter;
-pub mod nil_formatter;
-pub mod plain_formatter;
-pub mod json_formatter;
-pub mod protocol_formatter;
-
-mod version {
-    pub const SUPPORTED_MINIMUM : u32 = 1;
-    pub const SUPPORTED_MAXIMUM : u32 = 7;
-}
-
-mod constants {
-    pub const RDB_6BITLEN : u8 = 0;
-    pub const RDB_14BITLEN : u8 = 1;
-    pub const RDB_ENCVAL : u8 = 3;
-    pub const RDB_MAGIC : &'static str = "REDIS";
-}
-
-mod op_codes {
-    pub const AUX : u8 = 250;
-    pub const RESIZEDB : u8 = 251;
-    pub const EXPIRETIME_MS : u8 = 252;
-    pub const EXPIRETIME : u8 = 253;
-    pub const SELECTDB   : u8 = 254;
-    pub const EOF : u8 = 255;
-}
-
-mod types {
-    pub const STRING : u8 = 0;
-    pub const LIST : u8 = 1;
-    pub const SET : u8 = 2;
-    pub const ZSET : u8 = 3;
-    pub const HASH : u8 = 4;
-    pub const HASH_ZIPMAP : u8 = 9;
-    pub const LIST_ZIPLIST : u8 = 10;
-    pub const SET_INTSET : u8 = 11;
-    pub const ZSET_ZIPLIST : u8 = 12;
-    pub const HASH_ZIPLIST : u8 = 13;
-    pub const LIST_QUICKLIST : u8 = 14;
-}
-
-mod encoding {
-    pub const INT8 : u32 = 0;
-    pub const INT16 : u32 = 1;
-    pub const INT32 : u32 = 2;
-    pub const LZF : u32 = 3;
-}
-
-#[derive(Copy,PartialEq)]
-pub enum Type {
-    String,
-    List,
-    Set,
-    SortedSet,
-    Hash
-}
-
-impl Type {
-    fn from_encoding(enc_type: u8) -> Type {
-        match enc_type {
-            types::STRING => Type::String,
-            types::HASH | types::HASH_ZIPMAP | types::HASH_ZIPLIST => Type::Hash,
-            types::LIST | types::LIST_ZIPLIST => Type::List,
-            types::SET | types::SET_INTSET => Type::Set,
-            types::ZSET | types::ZSET_ZIPLIST => Type::SortedSet,
-            _ => { panic!("Unknown encoding type: {}", enc_type) }
-        }
-    }
-}
+mod formatter;
+mod nil_formatter;
+mod plain_formatter;
+mod json_formatter;
+mod protocol_formatter;
 
 #[derive(Show,Clone)]
 pub enum DataType {
@@ -175,70 +135,6 @@ pub enum DataType {
     Unknown
 }
 
-pub trait RdbFilter {
-    fn matches_db(&self, _db: u32) -> bool { true }
-    fn matches_type(&self, _enc_type: u8) -> bool { true }
-    fn matches_key(&self, _key: &[u8]) -> bool { true }
-
-}
-
-#[derive(Copy)]
-pub struct AllFilter;
-impl RdbFilter for AllFilter {}
-
-pub struct StrictFilter {
-    databases: Vec<u32>,
-    types: Vec<Type>,
-    keys: Option<Regex>
-}
-
-impl StrictFilter {
-    pub fn new() -> StrictFilter {
-        StrictFilter { databases: vec![], types: vec![], keys: None }
-    }
-
-    pub fn add_database(&mut self, db: u32) {
-        self.databases.push(db);
-    }
-
-    pub fn add_type(&mut self, typ: Type) {
-        self.types.push(typ);
-    }
-
-    pub fn add_keys(&mut self, re: Regex) {
-        self.keys = Some(re);
-    }
-}
-
-impl RdbFilter for StrictFilter {
-    fn matches_db(&self, db: u32) -> bool {
-        if self.databases.is_empty() {
-            true
-        } else {
-            self.databases.iter().any(|&x| x == db)
-        }
-    }
-
-    fn matches_type(&self, enc_type: u8) -> bool {
-        if self.types.is_empty() {
-            return true
-        }
-
-        let typ = Type::from_encoding(enc_type);
-        self.types.iter().any(|&x| x == typ)
-    }
-
-    fn matches_key(&self, key: &[u8]) -> bool {
-        match self.keys.clone() {
-            None => true,
-            Some(re) => {
-                let key = unsafe{str::from_utf8_unchecked(key)};
-                re.is_match(key)
-            }
-        }
-    }
-}
-
 pub struct RdbParser<R: Reader, F: RdbParseFormatter, L: RdbFilter> {
     input: R,
     formatter: F,
@@ -246,21 +142,21 @@ pub struct RdbParser<R: Reader, F: RdbParseFormatter, L: RdbFilter> {
     last_expiretime: Option<u64>
 }
 
-pub fn read_length_with_encoding<R: Reader>(input: &mut R) -> (u32, bool) {
+pub fn read_length_with_encoding<R: Reader>(input: &mut R) -> RdbResult<(u32, bool)> {
     let mut length;
     let mut is_encoded = false;
 
     let enc_type = input.read_byte().unwrap();
 
     match (enc_type & 0xC0) >> 6 {
-        constants::RDB_ENCVAL => {
+        constant::RDB_ENCVAL => {
             is_encoded = true;
             length = (enc_type & 0x3F) as u32;
         },
-        constants::RDB_6BITLEN => {
+        constant::RDB_6BITLEN => {
             length = (enc_type & 0x3F) as u32;
         },
-        constants::RDB_14BITLEN => {
+        constant::RDB_14BITLEN => {
             let next_byte = input.read_byte().unwrap();
             length = (((enc_type & 0x3F) as u32) <<8) | next_byte as u32;
         },
@@ -269,23 +165,23 @@ pub fn read_length_with_encoding<R: Reader>(input: &mut R) -> (u32, bool) {
         }
     }
 
-    (length, is_encoded)
+    Ok((length, is_encoded))
 }
 
-pub fn read_length<R: Reader>(input: &mut R) -> u32 {
-    let (length, _) = read_length_with_encoding(input);
-    length
+pub fn read_length<R: Reader>(input: &mut R) -> RdbResult<u32> {
+    let (length, _) = try!(read_length_with_encoding(input));
+    Ok(length)
 }
 
 pub fn verify_magic<R: Reader>(input: &mut R) -> bool {
     let magic = input.read_exact(5).unwrap();
 
     // Meeeeeh.
-    magic[0] == constants::RDB_MAGIC.as_bytes()[0] &&
-        magic[1] == constants::RDB_MAGIC.as_bytes()[1] &&
-        magic[2] == constants::RDB_MAGIC.as_bytes()[2] &&
-        magic[3] == constants::RDB_MAGIC.as_bytes()[3] &&
-        magic[4] == constants::RDB_MAGIC.as_bytes()[4]
+    magic[0] == constant::RDB_MAGIC.as_bytes()[0] &&
+        magic[1] == constant::RDB_MAGIC.as_bytes()[1] &&
+        magic[2] == constant::RDB_MAGIC.as_bytes()[2] &&
+        magic[3] == constant::RDB_MAGIC.as_bytes()[3] &&
+        magic[4] == constant::RDB_MAGIC.as_bytes()[4]
 }
 
 pub fn verify_version<R: Reader>(input: &mut R) -> bool {
@@ -301,7 +197,7 @@ pub fn verify_version<R: Reader>(input: &mut R) -> bool {
 }
 
 pub fn read_blob<R: Reader>(input: &mut R) -> Vec<u8> {
-    let (length, is_encoded) = read_length_with_encoding(input);
+    let (length, is_encoded) = unwrap_or_panic!(read_length_with_encoding(input));
 
     if is_encoded {
         match length {
@@ -309,8 +205,8 @@ pub fn read_blob<R: Reader>(input: &mut R) -> Vec<u8> {
             encoding::INT16 => { helper::int_to_vec(input.read_le_i16().unwrap() as i32) },
             encoding::INT32 => { helper::int_to_vec(input.read_le_i32().unwrap() as i32) },
             encoding::LZF => {
-                let compressed_length = read_length(input);
-                let real_length = read_length(input);
+                let compressed_length = unwrap_or_panic!(read_length(input));
+                let real_length = unwrap_or_panic!(read_length(input));
                 let data = input.read_exact(compressed_length as usize).unwrap();
                 lzf::decompress(data.as_slice(), real_length as usize).unwrap()
             },
@@ -355,13 +251,13 @@ impl<R: Reader, F: RdbParseFormatter, L: RdbFilter> RdbParser<R, F, L> {
             let next_op = self.input.read_byte().unwrap();
 
             match next_op {
-                op_codes::SELECTDB => {
-                    last_database = read_length(&mut self.input);
+                op_code::SELECTDB => {
+                    last_database = unwrap_or_panic!(read_length(&mut self.input));
                     if self.filter.matches_db(last_database) {
                         self.formatter.start_database(last_database);
                     }
                 },
-                op_codes::EOF => {
+                op_code::EOF => {
                     self.formatter.end_database(last_database);
                     self.formatter.end_rdb();
 
@@ -369,21 +265,21 @@ impl<R: Reader, F: RdbParseFormatter, L: RdbFilter> RdbParser<R, F, L> {
                     self.formatter.checksum(checksum.as_slice());
                     break;
                 },
-                op_codes::EXPIRETIME_MS => {
+                op_code::EXPIRETIME_MS => {
                     let expiretime_ms = self.input.read_le_u64().unwrap();
                     self.last_expiretime = Some(expiretime_ms);
                 },
-                op_codes::EXPIRETIME => {
+                op_code::EXPIRETIME => {
                     let expiretime = self.input.read_be_u32().unwrap();
                     self.last_expiretime = Some(expiretime as u64 * 1000);
                 },
-                op_codes::RESIZEDB => {
-                    let db_size = read_length(&mut self.input);
-                    let expires_size = read_length(&mut self.input);
+                op_code::RESIZEDB => {
+                    let db_size = unwrap_or_panic!(read_length(&mut self.input));
+                    let expires_size = unwrap_or_panic!(read_length(&mut self.input));
 
                     self.formatter.resizedb(db_size, expires_size);
                 },
-                op_codes::AUX => {
+                op_code::AUX => {
                     let auxkey = read_blob(&mut self.input);
                     let auxval = read_blob(&mut self.input);
 
@@ -412,7 +308,7 @@ impl<R: Reader, F: RdbParseFormatter, L: RdbFilter> RdbParser<R, F, L> {
     }
 
     fn read_linked_list(&mut self, key: &[u8]) -> Vec<Vec<u8>> {
-        let mut len = read_length(&mut self.input);
+        let mut len = unwrap_or_panic!(read_length(&mut self.input));
         let mut list = vec![];
 
         self.formatter.start_list(key, len, self.last_expiretime, None);
@@ -431,7 +327,7 @@ impl<R: Reader, F: RdbParseFormatter, L: RdbFilter> RdbParser<R, F, L> {
 
     fn read_sorted_set(&mut self, key: &[u8]) -> Vec<(f64,Vec<u8>)> {
         let mut set = vec![];
-        let mut set_items = read_length(&mut self.input);
+        let mut set_items = unwrap_or_panic!(read_length(&mut self.input));
 
         self.formatter.start_sorted_set(key, set_items, self.last_expiretime, None);
 
@@ -462,7 +358,7 @@ impl<R: Reader, F: RdbParseFormatter, L: RdbFilter> RdbParser<R, F, L> {
 
     fn read_hash(&mut self, key: &[u8]) -> Vec<Vec<u8>> {
         let mut hash = vec![];
-        let mut hash_items = read_length(&mut self.input);
+        let mut hash_items = unwrap_or_panic!(read_length(&mut self.input));
 
         self.formatter.start_hash(key, hash_items, self.last_expiretime, None);
 
@@ -674,7 +570,7 @@ impl<R: Reader, F: RdbParseFormatter, L: RdbFilter> RdbParser<R, F, L> {
     }
 
     fn read_quicklist(&mut self, key: &[u8]) -> Vec<DataType> {
-        let len = read_length(&mut self.input);
+        let len = unwrap_or_panic!(read_length(&mut self.input));
 
         // FIXME: We don't know the real length here
         // Not sure how we do it correctly
@@ -691,39 +587,39 @@ impl<R: Reader, F: RdbParseFormatter, L: RdbFilter> RdbParser<R, F, L> {
 
     fn read_type(&mut self, key: &[u8], value_type: u8) -> DataType {
         match value_type {
-            types::STRING => {
+            encoding_type::STRING => {
                 let val = read_blob(&mut self.input);
                 self.formatter.set(key, val.as_slice(), self.last_expiretime);
                 DataType::String(val)
             },
-            types::LIST => {
+            encoding_type::LIST => {
                 DataType::List(self.read_linked_list(key))
             },
-            types::SET => {
+            encoding_type::SET => {
                 DataType::Set(self.read_linked_list(key))
             },
-            types::ZSET => {
+            encoding_type::ZSET => {
                 DataType::SortedSet(self.read_sorted_set(key))
             },
-            types::HASH => {
+            encoding_type::HASH => {
                 DataType::Hash(self.read_hash(key))
             },
-            types::HASH_ZIPMAP => {
+            encoding_type::HASH_ZIPMAP => {
                 DataType::Hash(self.read_hash_zipmap())
             },
-            types::LIST_ZIPLIST => {
+            encoding_type::LIST_ZIPLIST => {
                 DataType::ListOfTypes(self.read_list_ziplist(key))
             },
-            types::SET_INTSET => {
+            encoding_type::SET_INTSET => {
                 DataType::Intset(self.read_set_intset(key))
             },
-            types::ZSET_ZIPLIST => {
+            encoding_type::ZSET_ZIPLIST => {
                 DataType::SortedSetOfTypes(self.read_list_ziplist(key))
             },
-            types::HASH_ZIPLIST => {
+            encoding_type::HASH_ZIPLIST => {
                 DataType::ListOfTypes(self.read_list_ziplist(key))
             },
-            types::LIST_QUICKLIST => {
+            encoding_type::LIST_QUICKLIST => {
                 DataType::ListOfTypes(self.read_quicklist(key))
             },
             _ => { panic!("Value Type not implemented: {}", value_type) }
@@ -735,7 +631,7 @@ impl<R: Reader, F: RdbParseFormatter, L: RdbFilter> RdbParser<R, F, L> {
     }
 
     fn skip_blob(&mut self) {
-        let (len, is_encoded) = read_length_with_encoding(&mut self.input);
+        let (len, is_encoded) = unwrap_or_panic!(read_length_with_encoding(&mut self.input));
         let mut skip_bytes;
 
         if is_encoded {
@@ -744,8 +640,8 @@ impl<R: Reader, F: RdbParseFormatter, L: RdbFilter> RdbParser<R, F, L> {
                 encoding::INT16 => 2,
                 encoding::INT32 => 4,
                 encoding::LZF => {
-                    let compressed_length = read_length(&mut self.input);
-                    let _real_length = read_length(&mut self.input);
+                    let compressed_length = unwrap_or_panic!(read_length(&mut self.input));
+                    let _real_length = unwrap_or_panic!(read_length(&mut self.input));
                     compressed_length
                 },
                 _ => { panic!("Unknown encoding: {}", len) }
@@ -759,14 +655,14 @@ impl<R: Reader, F: RdbParseFormatter, L: RdbFilter> RdbParser<R, F, L> {
 
     fn skip_object(&mut self, enc_type: u8) {
         let blobs_to_skip = match enc_type {
-            types::STRING |
-                types::HASH_ZIPMAP |
-                types::LIST_ZIPLIST |
-                types::SET_INTSET |
-                types::ZSET_ZIPLIST |
-                types::HASH_ZIPLIST => 1,
-            types::LIST | types::SET => read_length(&mut self.input),
-            types::ZSET | types::HASH => read_length(&mut self.input) * 2,
+            encoding_type::STRING |
+                encoding_type::HASH_ZIPMAP |
+                encoding_type::LIST_ZIPLIST |
+                encoding_type::SET_INTSET |
+                encoding_type::ZSET_ZIPLIST |
+                encoding_type::HASH_ZIPLIST => 1,
+            encoding_type::LIST | encoding_type::SET => unwrap_or_panic!(read_length(&mut self.input)),
+            encoding_type::ZSET | encoding_type::HASH => unwrap_or_panic!(read_length(&mut self.input)) * 2,
             _ => { panic!("Unknown encoding type: {}", enc_type) }
         };
 
