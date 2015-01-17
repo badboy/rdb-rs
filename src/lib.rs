@@ -25,7 +25,7 @@
 //! # use std::io::{BufferedReader, File};
 //! let file = File::open(&Path::new("dump.rdb"));
 //! let reader = BufferedReader::new(file);
-//! rdb::parse(reader, rdb::JSONFormatter::new(), rdb::StrictFilter::new());
+//! rdb::parse(reader, rdb::formatter::JSON::new(), rdb::filter::Simple::new());
 //! ```
 //!
 //! # Formatter
@@ -90,12 +90,8 @@ use constants::{
     encoding
 };
 
-pub use formatter::RdbParseFormatter;
-pub use nil_formatter::NilFormatter;
-pub use plain_formatter::PlainFormatter;
-pub use json_formatter::JSONFormatter;
-pub use protocol_formatter::ProtocolFormatter;
-pub use filter::{RdbFilter,StrictFilter};
+use formatter::RdbParseFormatter;
+use filter::RdbFilter;
 
 #[doc(hidden)]
 pub use types::{
@@ -114,13 +110,9 @@ mod macros;
 mod constants;
 mod helper;
 mod types;
-mod filter;
 
-mod formatter;
-mod nil_formatter;
-mod plain_formatter;
-mod json_formatter;
-mod protocol_formatter;
+pub mod formatter;
+pub mod filter;
 
 #[derive(Show,Clone)]
 pub enum ZiplistEntry {

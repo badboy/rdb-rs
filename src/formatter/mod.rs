@@ -1,5 +1,15 @@
+pub use self::nil::Nil;
+pub use self::plain::Plain;
+pub use self::json::JSON;
+pub use self::protocol::Protocol;
+
+pub mod nil;
+pub mod plain;
+pub mod json;
+pub mod protocol;
+
 #[allow(unused_variables)]
-pub trait RdbParseFormatter {
+pub trait Formatter {
     fn start_rdb(&mut self) {}
     fn end_rdb(&mut self) {}
     fn checksum(&mut self, checksum: &[u8]) {}

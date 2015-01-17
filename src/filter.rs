@@ -9,15 +9,15 @@ pub trait RdbFilter {
 
 }
 
-pub struct StrictFilter {
+pub struct Simple {
     databases: Vec<u32>,
     types: Vec<Type>,
     keys: Option<Regex>
 }
 
-impl StrictFilter {
-    pub fn new() -> StrictFilter {
-        StrictFilter { databases: vec![], types: vec![], keys: None }
+impl Simple {
+    pub fn new() -> Simple {
+        Simple { databases: vec![], types: vec![], keys: None }
     }
 
     pub fn add_database(&mut self, db: u32) {
@@ -33,7 +33,7 @@ impl StrictFilter {
     }
 }
 
-impl RdbFilter for StrictFilter {
+impl RdbFilter for Simple {
     fn matches_db(&self, db: u32) -> bool {
         if self.databases.is_empty() {
             true

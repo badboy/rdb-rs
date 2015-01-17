@@ -1,18 +1,18 @@
-use formatter::RdbParseFormatter;
+use formatter::Formatter;
 use std::io;
 
-pub struct PlainFormatter {
+pub struct Plain {
     out: Box<Writer+'static>
 }
 
-impl PlainFormatter {
-    pub fn new() -> PlainFormatter {
+impl Plain {
+    pub fn new() -> Plain {
         let out = Box::new(io::stdout());
-        PlainFormatter { out: out }
+        Plain { out: out }
     }
 }
 
-impl RdbParseFormatter for PlainFormatter {
+impl Formatter for Plain {
     fn start_rdb(&mut self) {
         println!("Start of RDB");
     }

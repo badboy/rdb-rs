@@ -1,21 +1,21 @@
 #![allow(unused_must_use)]
 
-use formatter::RdbParseFormatter;
+use formatter::Formatter;
 use std::io;
 
-pub struct ProtocolFormatter {
+pub struct Protocol {
     out: Box<Writer+'static>,
     last_expiry: Option<u64>
 }
 
-impl ProtocolFormatter {
-    pub fn new() -> ProtocolFormatter {
+impl Protocol {
+    pub fn new() -> Protocol {
         let out = Box::new(io::stdout());
-        ProtocolFormatter { out: out, last_expiry: None }
+        Protocol { out: out, last_expiry: None }
     }
 }
 
-impl ProtocolFormatter {
+impl Protocol {
     fn emit(&mut self, args: Vec<&[u8]>) {
         self.out.write_str("*");
         self.out.write(args.len().to_string().as_bytes());
@@ -42,7 +42,7 @@ impl ProtocolFormatter {
     }
 }
 
-impl RdbParseFormatter for ProtocolFormatter {
+impl Formatter for Protocol {
     fn start_rdb(&mut self) {
     }
 

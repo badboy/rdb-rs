@@ -1,11 +1,11 @@
 #![allow(unused_must_use)]
 
-use formatter::RdbParseFormatter;
+use formatter::Formatter;
 use std::io;
 use std::str;
 use serialize::json;
 
-pub struct JSONFormatter {
+pub struct JSON {
     out: Box<Writer+'static>,
     is_first_db: bool,
     has_databases: bool,
@@ -14,10 +14,10 @@ pub struct JSONFormatter {
     element_index: u32
 }
 
-impl JSONFormatter {
-    pub fn new() -> JSONFormatter {
+impl JSON {
+    pub fn new() -> JSON {
         let out = Box::new(io::stdout());
-        JSONFormatter {
+        JSON {
             out: out,
             is_first_db: true,
             has_databases: false,
@@ -33,7 +33,7 @@ fn encode_to_ascii(value: &[u8]) -> String {
     json::encode(&s)
 }
 
-impl JSONFormatter {
+impl JSON {
     fn start_key(&mut self, length: u32) {
         if !self.is_first_key_in_db {
             self.out.write_str(",");
@@ -61,7 +61,7 @@ impl JSONFormatter {
     }
 }
 
-impl RdbParseFormatter for JSONFormatter {
+impl Formatter for JSON {
     fn start_rdb(&mut self) {
         self.out.write_str("[");
     }
