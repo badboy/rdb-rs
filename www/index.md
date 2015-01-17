@@ -75,7 +75,7 @@ It's easy to build your own formatter. All you need to do is implementing the `R
 
 The code is available on GitHub: [github.com/badboy/rdb-rs](https://github.com/badboy/rdb-rs).  
 Submit bugs, requests and improvements to the [issue tracker](https://github.com/badboy/rdb-rs/issues).
-You can also contact me via [email](mailto:rdb-rs@fnordig.de) or [twitter](https://twitter.com/badboy_).
+You can also contact me via [email](mailto:janerik@fnordig.de) or [twitter](https://twitter.com/badboy_).
 
 ## Documentation
 
