@@ -24,6 +24,8 @@ pub use types::{
     RdbError,
     RdbResult,
     RdbOk,
+
+    EncodingType
 };
 
 pub struct RdbParser<R: Reader, F: Formatter, L: Filter> {
@@ -219,7 +221,7 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
     fn read_linked_list(&mut self, key: &[u8]) -> RdbOk {
         let mut len = try!(read_length(&mut self.input));
 
-        self.formatter.start_list(key, len, self.last_expiretime, None);
+        self.formatter.start_list(key, len, self.last_expiretime, EncodingType::LinkedList);
 
         while len > 0 {
             let blob = try!(read_blob(&mut self.input));
@@ -235,7 +237,7 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
     fn read_sorted_set(&mut self, key: &[u8]) -> RdbOk {
         let mut set_items = unwrap_or_panic!(read_length(&mut self.input));
 
-        self.formatter.start_sorted_set(key, set_items, self.last_expiretime, None);
+        self.formatter.start_sorted_set(key, set_items, self.last_expiretime, EncodingType::Hashtable);
 
         while set_items > 0 {
             let val = try!(read_blob(&mut self.input));
@@ -264,7 +266,7 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
     fn read_hash(&mut self, key: &[u8]) -> RdbOk {
         let mut hash_items = try!(read_length(&mut self.input));
 
-        self.formatter.start_hash(key, hash_items, self.last_expiretime, None);
+        self.formatter.start_hash(key, hash_items, self.last_expiretime, EncodingType::Hashtable);
 
         while hash_items > 0 {
             let field = try!(read_blob(&mut self.input));
@@ -353,11 +355,13 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
 
     fn read_list_ziplist(&mut self, key: &[u8]) -> RdbOk {
         let ziplist = try!(read_blob(&mut self.input));
+        let raw_length = ziplist.len() as u64;
 
         let mut reader = MemReader::new(ziplist);
         let (_zlbytes, _zltail, zllen) = try!(read_ziplist_metadata(&mut reader));
 
-        self.formatter.start_list(key, zllen as u32, self.last_expiretime, None);
+        self.formatter.start_list(key, zllen as u32, self.last_expiretime,
+                                  EncodingType::Ziplist(raw_length));
 
         try!(self.read_ziplist_entries(&mut reader, key, zllen));
 
@@ -410,6 +414,7 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
 
     fn read_hash_zipmap(&mut self, key: &[u8]) -> RdbOk {
         let zipmap = try!(read_blob(&mut self.input));
+        let raw_length = zipmap.len() as u64;
 
         let mut reader = MemReader::new(zipmap);
 
@@ -425,7 +430,8 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
             size = 0;
         }
 
-        self.formatter.start_hash(key, size as u32, self.last_expiretime, None);
+        self.formatter.start_hash(key, size as u32, self.last_expiretime,
+                                  EncodingType::Zipmap(raw_length));
 
         loop {
             let next_byte = try!(reader.read_byte());
@@ -467,12 +473,14 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
 
     fn read_set_intset(&mut self, key: &[u8]) -> RdbOk {
         let intset = try!(read_blob(&mut self.input));
+        let raw_length = intset.len() as u64;
 
         let mut reader = MemReader::new(intset);
         let byte_size = try!(reader.read_le_u32());
         let intset_length = try!(reader.read_le_u32());
 
-        self.formatter.start_set(key, intset_length, self.last_expiretime, None);
+        self.formatter.start_set(key, intset_length, self.last_expiretime,
+                                 EncodingType::Intset(raw_length));
 
         for _ in (0..intset_length) {
             let val = match byte_size {
@@ -493,7 +501,7 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
     fn read_quicklist(&mut self, key: &[u8]) -> RdbOk {
         let len = try!(read_length(&mut self.input));
 
-        self.formatter.start_set(key, 0, self.last_expiretime, None);
+        self.formatter.start_set(key, 0, self.last_expiretime, EncodingType::Quicklist);
         for _ in (0..len) {
             try!(self.read_quicklist_ziplist(key));
         }

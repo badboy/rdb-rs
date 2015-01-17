@@ -4,6 +4,7 @@ use formatter::Formatter;
 use std::io;
 use std::str;
 use serialize::json;
+use types::EncodingType;
 
 pub struct JSON {
     out: Box<Writer+'static>,
@@ -92,7 +93,7 @@ impl Formatter for JSON {
     }
 
     fn start_hash(&mut self, key: &[u8], length: u32,
-                  _expiry: Option<u64>, _info: Option<()>) {
+                  _expiry: Option<u64>, _info: EncodingType) {
         self.start_key(length);
         self.write_key(key);
         self.out.write_str(":{");
@@ -114,7 +115,7 @@ impl Formatter for JSON {
     }
 
     fn start_set(&mut self, key: &[u8], cardinality: u32,
-                 _expiry: Option<u64>, _info: Option<()>) {
+                 _expiry: Option<u64>, _info: EncodingType) {
         self.start_key(cardinality);
         self.write_key(key);
         self.out.write_str(":[");
@@ -132,7 +133,7 @@ impl Formatter for JSON {
     }
 
     fn start_list(&mut self, key: &[u8], length: u32,
-                  _expiry: Option<u64>, _info: Option<()>) {
+                  _expiry: Option<u64>, _info: EncodingType) {
         self.start_key(length);
         self.write_key(key);
         self.out.write_str(":[");
@@ -149,7 +150,7 @@ impl Formatter for JSON {
     }
 
     fn start_sorted_set(&mut self, key: &[u8], length: u32,
-                        _expiry: Option<u64>, _info: Option<()>) {
+                        _expiry: Option<u64>, _info: EncodingType) {
         self.start_key(length);
         self.write_key(key);
         self.out.write_str(":{");

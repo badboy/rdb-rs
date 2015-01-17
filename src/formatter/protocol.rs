@@ -2,6 +2,7 @@
 
 use formatter::Formatter;
 use std::io;
+use types::EncodingType;
 
 pub struct Protocol {
     out: Box<Writer+'static>,
@@ -61,7 +62,7 @@ impl Formatter for Protocol {
     }
 
     fn start_hash(&mut self, _key: &[u8], _length: u32,
-                  expiry: Option<u64>, _info: Option<()>) {
+                  expiry: Option<u64>, _info: EncodingType) {
         self.pre_expire(expiry);
     }
     fn end_hash(&mut self, key: &[u8]) {
@@ -73,7 +74,7 @@ impl Formatter for Protocol {
 
 
     fn start_set(&mut self, _key: &[u8], _cardinality: u32,
-                 expiry: Option<u64>, _info: Option<()>) {
+                 expiry: Option<u64>, _info: EncodingType) {
         self.pre_expire(expiry);
     }
     fn end_set(&mut self, key: &[u8]) {
@@ -85,7 +86,7 @@ impl Formatter for Protocol {
 
 
     fn start_list(&mut self, _key: &[u8], _length: u32,
-                  expiry: Option<u64>, _info: Option<()>) {
+                  expiry: Option<u64>, _info: EncodingType) {
         self.pre_expire(expiry);
     }
     fn end_list(&mut self, key: &[u8]) {
@@ -96,7 +97,7 @@ impl Formatter for Protocol {
     }
 
     fn start_sorted_set(&mut self, _key: &[u8], _length: u32,
-                        expiry: Option<u64>, _info: Option<()>) {
+                        expiry: Option<u64>, _info: EncodingType) {
         self.pre_expire(expiry);
     }
     fn end_sorted_set(&mut self, key: &[u8]) {

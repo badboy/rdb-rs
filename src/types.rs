@@ -35,3 +35,15 @@ impl Type {
         }
     }
 }
+
+#[derive(Copy)]
+pub enum EncodingType {
+    String,
+    LinkedList,
+    Hashtable,
+    Skiplist,
+    Intset(u64),
+    Ziplist(u64),
+    Zipmap(u64),
+    Quicklist
+}
