@@ -2,13 +2,10 @@ use std::io::IoError;
 
 use constants::encoding_type;
 
-pub enum Value {
-    Blob(Vec<u8>),
-    List(Vec<Vec<u8>>),
-    IntegerList(Vec<i64>),
-    Set(Vec<Vec<u8>>),
-    SortedSet(Vec<(Vec<u8>,f64)>),
-    Hash(Vec<(Vec<u8>,Vec<u8>)>)
+#[derive(Show,Clone)]
+pub enum ZiplistEntry {
+    String(Vec<u8>),
+    Number(i64),
 }
 
 pub type RdbError = IoError;
