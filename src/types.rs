@@ -1,4 +1,5 @@
-use std::error;
+use std::io::IoError;
+
 use constants::encoding_type;
 
 pub enum Value {
@@ -10,10 +11,11 @@ pub enum Value {
     Hash(Vec<(Vec<u8>,Vec<u8>)>)
 }
 
-#[derive(PartialEq, Eq, Clone, Show)]
-pub struct RdbError;
+pub type RdbError = IoError;
 
 pub type RdbResult<T> = Result<T, RdbError>;
+
+pub type RdbOk = RdbResult<()>;
 
 #[derive(Copy,PartialEq)]
 pub enum Type {

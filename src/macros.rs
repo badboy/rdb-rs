@@ -27,3 +27,11 @@ macro_rules! unwrap_or_panic {
         Err(err) => panic!("Error: {:?}", err)
     })
 }
+
+
+macro_rules! try_or_ok {
+    ($expr:expr) => (match $expr {
+        Ok(_) => Ok(()),
+        e => e
+    })
+}

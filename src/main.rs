@@ -78,16 +78,16 @@ pub fn main() {
 
         match f.as_slice() {
             "json" => {
-                rdb::parse(reader, rdb::JSONFormatter::new(), filter)
+                let _ = rdb::parse(reader, rdb::JSONFormatter::new(), filter);
             },
             "plain" => {
-                rdb::parse(reader, rdb::PlainFormatter::new(), filter)
+                let _ = rdb::parse(reader, rdb::PlainFormatter::new(), filter);
             },
             "nil" => {
-                rdb::parse(reader, rdb::NilFormatter::new(), filter)
+                let _ = rdb::parse(reader, rdb::NilFormatter::new(), filter);
             }
             "protocol" => {
-                rdb::parse(reader, rdb::ProtocolFormatter::new(), filter)
+                let _ = rdb::parse(reader, rdb::ProtocolFormatter::new(), filter);
             }
             _ => {
                 println!("Unknown format: {}", f);
@@ -105,6 +105,6 @@ pub fn main() {
         let path = matches.free[0].clone();
         let file = File::open(&Path::new(path));
         let reader = BufferedReader::new(file);
-        rdb::parse(reader, rdb::JSONFormatter::new(), filter)
+        let _ = rdb::parse(reader, rdb::JSONFormatter::new(), filter);
     }
 }

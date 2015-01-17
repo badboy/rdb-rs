@@ -25,7 +25,7 @@
 //! # use std::io::{BufferedReader, File};
 //! let file = File::open(&Path::new("dump.rdb"));
 //! let reader = BufferedReader::new(file);
-//! rdb::parse(reader, rdb::JSONFormatter::new(), rdb::AllFilter)
+//! rdb::parse(reader, rdb::JSONFormatter::new(), rdb::StrictFilter::new());
 //! ```
 //!
 //! # Formatter
@@ -80,6 +80,7 @@ extern crate regex;
 use std::str;
 use lzf::decompress;
 use std::io::MemReader;
+use std::io::{IoError,IoErrorKind};
 
 use constants::{
     version,
@@ -104,6 +105,7 @@ pub use types::{
     /* error and result types */
     RdbError,
     RdbResult,
+    RdbOk,
 
     Type,
 };
@@ -121,18 +123,9 @@ mod json_formatter;
 mod protocol_formatter;
 
 #[derive(Show,Clone)]
-pub enum DataType {
+pub enum ZiplistEntry {
     String(Vec<u8>),
     Number(i64),
-    ListOfTypes(Vec<DataType>),
-    HashOfTypes(Vec<DataType>),
-    SortedSetOfTypes(Vec<DataType>),
-    Intset(Vec<i64>),
-    List(Vec<Vec<u8>>),
-    Set(Vec<Vec<u8>>),
-    SortedSet(Vec<(f64,Vec<u8>)>),
-    Hash(Vec<Vec<u8>>),
-    Unknown
 }
 
 pub struct RdbParser<R: Reader, F: RdbParseFormatter, L: RdbFilter> {
@@ -146,7 +139,7 @@ pub fn read_length_with_encoding<R: Reader>(input: &mut R) -> RdbResult<(u32, bo
     let mut length;
     let mut is_encoded = false;
 
-    let enc_type = input.read_byte().unwrap();
+    let enc_type = try!(input.read_byte());
 
     match (enc_type & 0xC0) >> 6 {
         constant::RDB_ENCVAL => {
@@ -157,11 +150,11 @@ pub fn read_length_with_encoding<R: Reader>(input: &mut R) -> RdbResult<(u32, bo
             length = (enc_type & 0x3F) as u32;
         },
         constant::RDB_14BITLEN => {
-            let next_byte = input.read_byte().unwrap();
+            let next_byte = try!(input.read_byte());
             length = (((enc_type & 0x3F) as u32) <<8) | next_byte as u32;
         },
         _ => {
-            length = input.read_be_u32().unwrap();
+            length = try!(input.read_be_u32());
         }
     }
 
@@ -173,59 +166,81 @@ pub fn read_length<R: Reader>(input: &mut R) -> RdbResult<u32> {
     Ok(length)
 }
 
-pub fn verify_magic<R: Reader>(input: &mut R) -> bool {
-    let magic = input.read_exact(5).unwrap();
+pub fn verify_magic<R: Reader>(input: &mut R) -> RdbOk {
+    let magic = try!(input.read_exact(5));
 
     // Meeeeeh.
-    magic[0] == constant::RDB_MAGIC.as_bytes()[0] &&
+    let is_ok = magic[0] == constant::RDB_MAGIC.as_bytes()[0] &&
         magic[1] == constant::RDB_MAGIC.as_bytes()[1] &&
         magic[2] == constant::RDB_MAGIC.as_bytes()[2] &&
         magic[3] == constant::RDB_MAGIC.as_bytes()[3] &&
-        magic[4] == constant::RDB_MAGIC.as_bytes()[4]
+        magic[4] == constant::RDB_MAGIC.as_bytes()[4];
+
+    if is_ok {
+        Ok(())
+    } else {
+        Err(IoError {
+            kind: IoErrorKind::OtherIoError,
+            desc: "Invalid magic string",
+            detail: None
+        })
+    }
 }
 
-pub fn verify_version<R: Reader>(input: &mut R) -> bool {
-    let version = input.read_exact(4).unwrap();
+pub fn verify_version<R: Reader>(input: &mut R) -> RdbOk {
+    let version = try!(input.read_exact(4));
 
     let version = (version[0]-48) as u32 * 1000 +
         (version[1]-48) as u32 * 100 +
         (version[2]-48) as u32 * 10 +
         (version[3]-48) as u32;
 
-    version >= version::SUPPORTED_MINIMUM &&
-        version <= version::SUPPORTED_MAXIMUM
-}
+    let is_ok = version >= version::SUPPORTED_MINIMUM &&
+        version <= version::SUPPORTED_MAXIMUM;
 
-pub fn read_blob<R: Reader>(input: &mut R) -> Vec<u8> {
-    let (length, is_encoded) = unwrap_or_panic!(read_length_with_encoding(input));
-
-    if is_encoded {
-        match length {
-            encoding::INT8 => { helper::int_to_vec(input.read_i8().unwrap() as i32) },
-            encoding::INT16 => { helper::int_to_vec(input.read_le_i16().unwrap() as i32) },
-            encoding::INT32 => { helper::int_to_vec(input.read_le_i32().unwrap() as i32) },
-            encoding::LZF => {
-                let compressed_length = unwrap_or_panic!(read_length(input));
-                let real_length = unwrap_or_panic!(read_length(input));
-                let data = input.read_exact(compressed_length as usize).unwrap();
-                lzf::decompress(data.as_slice(), real_length as usize).unwrap()
-            },
-            _ => { panic!("Unknown encoding: {}", length) }
-        }
+    if is_ok {
+        Ok(())
     } else {
-        input.read_exact(length as usize).unwrap()
+        Err(IoError {
+            kind: IoErrorKind::OtherIoError,
+            desc: "Version not supported",
+            detail: None
+        })
     }
 }
 
-fn read_ziplist_metadata<T: Reader>(input: &mut T) -> (u32, u32, u16) {
-    let zlbytes = input.read_le_u32().unwrap();
-    let zltail = input.read_le_u32().unwrap();
-    let zllen = input.read_le_u16().unwrap();
+pub fn read_blob<R: Reader>(input: &mut R) -> RdbResult<Vec<u8>> {
+    let (length, is_encoded) = try!(read_length_with_encoding(input));
 
-    (zlbytes, zltail, zllen)
+    if is_encoded {
+        let result = match length {
+            encoding::INT8 => { helper::int_to_vec(try!(input.read_i8()) as i32) },
+            encoding::INT16 => { helper::int_to_vec(try!(input.read_le_i16()) as i32) },
+            encoding::INT32 => { helper::int_to_vec(try!(input.read_le_i32()) as i32) },
+            encoding::LZF => {
+                let compressed_length = try!(read_length(input));
+                let real_length = try!(read_length(input));
+                let data = try!(input.read_exact(compressed_length as usize));
+                lzf::decompress(data.as_slice(), real_length as usize).unwrap()
+            },
+            _ => { panic!("Unknown encoding: {}", length) }
+        };
+
+        Ok(result)
+    } else {
+        input.read_exact(length as usize)
+    }
 }
 
-pub fn parse<R: Reader, F: RdbParseFormatter, T: RdbFilter>(input: R, formatter: F, filter: T) {
+fn read_ziplist_metadata<T: Reader>(input: &mut T) -> RdbResult<(u32, u32, u16)> {
+    let zlbytes = try!(input.read_le_u32());
+    let zltail = try!(input.read_le_u32());
+    let zllen = try!(input.read_le_u16());
+
+    Ok((zlbytes, zltail, zllen))
+}
+
+pub fn parse<R: Reader, F: RdbParseFormatter, T: RdbFilter>(input: R, formatter: F, filter: T) -> RdbOk {
     let mut parser = RdbParser::new(input, formatter, filter);
     parser.parse()
 }
@@ -240,15 +255,15 @@ impl<R: Reader, F: RdbParseFormatter, L: RdbFilter> RdbParser<R, F, L> {
         }
     }
 
-    pub fn parse(&mut self) {
-        assert!(verify_magic(&mut self.input));
-        assert!(verify_version(&mut self.input));
+    pub fn parse(&mut self) -> RdbOk {
+        try!(verify_magic(&mut self.input));
+        try!(verify_version(&mut self.input));
 
         self.formatter.start_rdb();
 
         let mut last_database : u32 = 0;
         loop {
-            let next_op = self.input.read_byte().unwrap();
+            let next_op = try!(self.input.read_byte());
 
             match next_op {
                 op_code::SELECTDB => {
@@ -261,27 +276,27 @@ impl<R: Reader, F: RdbParseFormatter, L: RdbFilter> RdbParser<R, F, L> {
                     self.formatter.end_database(last_database);
                     self.formatter.end_rdb();
 
-                    let checksum = self.input.read_to_end().unwrap();
+                    let checksum = try!(self.input.read_to_end());
                     self.formatter.checksum(checksum.as_slice());
                     break;
                 },
                 op_code::EXPIRETIME_MS => {
-                    let expiretime_ms = self.input.read_le_u64().unwrap();
+                    let expiretime_ms = try!(self.input.read_le_u64());
                     self.last_expiretime = Some(expiretime_ms);
                 },
                 op_code::EXPIRETIME => {
-                    let expiretime = self.input.read_be_u32().unwrap();
+                    let expiretime = try!(self.input.read_be_u32());
                     self.last_expiretime = Some(expiretime as u64 * 1000);
                 },
                 op_code::RESIZEDB => {
-                    let db_size = unwrap_or_panic!(read_length(&mut self.input));
-                    let expires_size = unwrap_or_panic!(read_length(&mut self.input));
+                    let db_size = try!(read_length(&mut self.input));
+                    let expires_size = try!(read_length(&mut self.input));
 
                     self.formatter.resizedb(db_size, expires_size);
                 },
                 op_code::AUX => {
-                    let auxkey = read_blob(&mut self.input);
-                    let auxval = read_blob(&mut self.input);
+                    let auxkey = try!(read_blob(&mut self.input));
+                    let auxval = try!(read_blob(&mut self.input));
 
                     self.formatter.aux_field(
                         auxkey.as_slice(),
@@ -289,135 +304,126 @@ impl<R: Reader, F: RdbParseFormatter, L: RdbFilter> RdbParser<R, F, L> {
                 },
                 _ => {
                     if self.filter.matches_db(last_database) {
-                        let key = read_blob(&mut self.input);
+                        let key = try!(read_blob(&mut self.input));
 
                         if self.filter.matches_type(next_op) && self.filter.matches_key(key.as_slice()) {
-                            self.read_type(key.as_slice(), next_op);
+                            try!(self.read_type(key.as_slice(), next_op));
                         } else {
-                            self.skip_object(next_op);
+                            try!(self.skip_object(next_op));
                         }
                     } else {
-                        self.skip_key_and_object(next_op);
+                        try!(self.skip_key_and_object(next_op));
                     }
 
                     self.last_expiretime = None;
                 }
             }
-
         }
+
+        Ok(())
     }
 
-    fn read_linked_list(&mut self, key: &[u8]) -> Vec<Vec<u8>> {
-        let mut len = unwrap_or_panic!(read_length(&mut self.input));
-        let mut list = vec![];
+    fn read_linked_list(&mut self, key: &[u8]) -> RdbOk {
+        let mut len = try!(read_length(&mut self.input));
 
         self.formatter.start_list(key, len, self.last_expiretime, None);
 
         while len > 0 {
-            let blob = read_blob(&mut self.input);
+            let blob = try!(read_blob(&mut self.input));
             self.formatter.list_element(key, blob.as_slice());
-            list.push(blob);
             len -= 1;
         }
 
         self.formatter.end_list(key);
 
-        list
+        Ok(())
     }
 
-    fn read_sorted_set(&mut self, key: &[u8]) -> Vec<(f64,Vec<u8>)> {
-        let mut set = vec![];
+    fn read_sorted_set(&mut self, key: &[u8]) -> RdbOk {
         let mut set_items = unwrap_or_panic!(read_length(&mut self.input));
 
         self.formatter.start_sorted_set(key, set_items, self.last_expiretime, None);
 
         while set_items > 0 {
-            let val = read_blob(&mut self.input);
-            let score_length = self.input.read_byte().unwrap();
+            let val = try!(read_blob(&mut self.input));
+            let score_length = try!(self.input.read_byte());
             let score = match score_length {
                 253 => { std::f64::NAN },
                 254 => { std::f64::INFINITY },
                 255 => { std::f64::NEG_INFINITY },
                 _ => {
-                    let tmp = self.input.read_exact(score_length as usize).unwrap();
+                    let tmp = try!(self.input.read_exact(score_length as usize));
                     unsafe{str::from_utf8_unchecked(tmp.as_slice())}.
                         parse::<f64>().unwrap()
                 }
             };
 
             self.formatter.sorted_set_element(key, score, val.as_slice());
-            set.push((score, val));
 
             set_items -= 1;
         }
 
         self.formatter.end_sorted_set(key);
 
-        set
+        Ok(())
     }
 
-    fn read_hash(&mut self, key: &[u8]) -> Vec<Vec<u8>> {
-        let mut hash = vec![];
-        let mut hash_items = unwrap_or_panic!(read_length(&mut self.input));
+    fn read_hash(&mut self, key: &[u8]) -> RdbOk {
+        let mut hash_items = try!(read_length(&mut self.input));
 
         self.formatter.start_hash(key, hash_items, self.last_expiretime, None);
 
         while hash_items > 0 {
-            let field = read_blob(&mut self.input);
-            let val = read_blob(&mut self.input);
+            let field = try!(read_blob(&mut self.input));
+            let val = try!(read_blob(&mut self.input));
 
             self.formatter.hash_element(key, field.as_slice(), val.as_slice());
-
-            hash.push(field);
-            hash.push(val);
 
             hash_items -= 1;
         }
 
         self.formatter.end_hash(key);
 
-        hash
+        Ok(())
     }
 
-    fn read_ziplist_entry<T: Reader>(&mut self, ziplist: &mut T) -> DataType {
+    fn read_ziplist_entry<T: Reader>(&mut self, ziplist: &mut T) -> RdbResult<ZiplistEntry> {
         // 1. 1 or 5 bytes length of previous entry
-        match ziplist.read_byte().unwrap() {
-            254 => {
-                let _ = ziplist.read_exact(4).unwrap();
-            },
-            _ => {}
+        let byte = try!(ziplist.read_byte());
+        if byte == 254 {
+            try!(ziplist.read_exact(4));
         }
 
         let mut length : u64;
         let mut number_value : i64;
 
         // 2. Read flag or number value
-        let flag = ziplist.read_byte().unwrap();
+        let flag = try!(ziplist.read_byte());
 
         match (flag & 0xC0) >> 6 {
             0 => { length = (flag & 0x3F) as u64 },
             1 => {
-                let next_byte = ziplist.read_byte().unwrap();
+                let next_byte = try!(ziplist.read_byte());
                 length = (((flag & 0x3F) as u64) << 8) | next_byte as u64;
             },
             2 => {
-                length = ziplist.read_be_u32().unwrap() as u64;
+                length = try!(ziplist.read_be_u32()) as u64;
             },
             _ => {
                 match (flag & 0xF0) >> 4 {
-                    0xC => { number_value = ziplist.read_le_i16().unwrap() as i64 },
-                    0xD => { number_value = ziplist.read_le_i32().unwrap() as i64 },
-                    0xE => { number_value = ziplist.read_le_i64().unwrap() as i64 },
+                    0xC => { number_value = try!(ziplist.read_le_i16()) as i64 },
+                    0xD => { number_value = try!(ziplist.read_le_i32()) as i64 },
+                    0xE => { number_value = try!(ziplist.read_le_i64()) as i64 },
                     0xF => {
                         match flag & 0xF {
                             0 => {
-                                let bytes = ziplist.read_exact(3).unwrap();
+                                let bytes = try!(ziplist.read_exact(3));
                                 number_value = ((bytes[0] as i64) << 16) ^
                                     ((bytes[1] as i64) << 8) ^
                                     (bytes[2] as i64);
                             },
                             0xE => {
-                                number_value = ziplist.read_byte().unwrap() as i64 },
+                                number_value = try!(ziplist.read_byte()) as i64 },
                                 _ => { number_value = (flag & 0xF) as i64 - 1; }
                         }
                     },
@@ -427,64 +433,76 @@ impl<R: Reader, F: RdbParseFormatter, L: RdbFilter> RdbParser<R, F, L> {
 
                 }
 
-                return DataType::Number(number_value)
+                return Ok(ZiplistEntry::Number(number_value));
             }
         }
 
         // 3. Read value
-        let rawval = ziplist.read_exact(length as usize).unwrap();
-        DataType::String(rawval)
+        let rawval = try!(ziplist.read_exact(length as usize));
+        Ok(ZiplistEntry::String(rawval))
     }
 
-    fn read_ziplist_entries<T: Reader>(&mut self, reader: &mut T, key: &[u8], zllen: u16) -> Vec<DataType> {
-        let mut list = Vec::with_capacity(zllen as usize);
-
+    fn read_ziplist_entries<T: Reader>(&mut self, reader: &mut T, key: &[u8], zllen: u16) -> RdbOk {
         for _ in (0..zllen) {
-            let entry = self.read_ziplist_entry(reader);
+            let entry = try!(self.read_ziplist_entry(reader));
             match entry {
-                DataType::String(ref val) => {
+                ZiplistEntry::String(ref val) => {
                     self.formatter.list_element(key, val.as_slice());
                 },
-                DataType::Number(val) => {
+                ZiplistEntry::Number(val) => {
                     self.formatter.list_element(key, val.to_string().as_bytes());
-                },
-                _ => unreachable!()
+                }
             }
-            list.push(entry);
         }
-        list
+
+        Ok(())
     }
 
-    fn read_list_ziplist(&mut self, key: &[u8]) -> Vec<DataType> {
-        let ziplist = read_blob(&mut self.input);
+    fn read_list_ziplist(&mut self, key: &[u8]) -> RdbOk {
+        let ziplist = try!(read_blob(&mut self.input));
 
         let mut reader = MemReader::new(ziplist);
-        let (_zlbytes, _zltail, zllen) = read_ziplist_metadata(&mut reader);
+        let (_zlbytes, _zltail, zllen) = try!(read_ziplist_metadata(&mut reader));
 
         self.formatter.start_list(key, zllen as u32, self.last_expiretime, None);
 
-        let list = self.read_ziplist_entries(&mut reader, key, zllen);
+        try!(self.read_ziplist_entries(&mut reader, key, zllen));
 
-        assert!(reader.read_byte().unwrap() == 0xFF);
+        let last_byte = try!(reader.read_byte());
+        if last_byte != 0xFF {
+            return Err(IoError {
+                kind: IoErrorKind::OtherIoError,
+                desc: "Invalid end byte of ziplist",
+                detail: None
+            })
+        }
+
         self.formatter.end_list(key);
 
-        list
+        Ok(())
     }
 
-    fn read_quicklist_ziplist(&mut self, key: &[u8]) -> Vec<DataType> {
-        let ziplist = read_blob(&mut self.input);
+    fn read_quicklist_ziplist(&mut self, key: &[u8]) -> RdbOk {
+        let ziplist = try!(read_blob(&mut self.input));
 
         let mut reader = MemReader::new(ziplist);
-        let (_zlbytes, _zltail, zllen) = read_ziplist_metadata(&mut reader);
+        let (_zlbytes, _zltail, zllen) = try!(read_ziplist_metadata(&mut reader));
 
-        let list = self.read_ziplist_entries(&mut reader, key, zllen);
+        try!(self.read_ziplist_entries(&mut reader, key, zllen));
 
-        assert!(reader.read_byte().unwrap() == 0xFF);
+        let last_byte = try!(reader.read_byte());
+        if last_byte != 0xFF {
+            return Err(IoError {
+                kind: IoErrorKind::OtherIoError,
+                desc: "Invalid end byte of ziplist (quicklist)",
+                detail: None
+            })
+        }
 
-        list
+        Ok(())
     }
 
-    fn read_zipmap_entry<T: Reader>(&mut self, next_byte: u8, zipmap: &mut T) -> Vec<u8> {
+    fn read_zipmap_entry<T: Reader>(&mut self, next_byte: u8, zipmap: &mut T) -> RdbResult<Vec<u8>> {
         let mut elem_len;
         match next_byte {
             253 => { elem_len = zipmap.read_le_u32().unwrap() },
@@ -494,143 +512,153 @@ impl<R: Reader, F: RdbParseFormatter, L: RdbFilter> RdbParser<R, F, L> {
             _ => { elem_len = next_byte as u32 }
         }
 
-        zipmap.read_exact(elem_len as usize).unwrap()
+        zipmap.read_exact(elem_len as usize)
     }
 
-    fn read_hash_zipmap(&mut self) -> Vec<Vec<u8>> {
-        let zipmap = read_blob(&mut self.input);
+    fn read_hash_zipmap(&mut self, key: &[u8]) -> RdbOk {
+        let zipmap = try!(read_blob(&mut self.input));
 
         let mut reader = MemReader::new(zipmap);
 
-        let zmlen = reader.read_byte().unwrap();
+        let zmlen = try!(reader.read_byte());
 
         let mut length;
-        let mut hash;
+        let mut size;
         if zmlen <= 254 {
-            length = zmlen as usize;
-            hash = Vec::with_capacity(length);
+            length = zmlen;
+            size = zmlen
         } else {
             length = -1;
-            hash = Vec::with_capacity(255);
+            size = 0;
         }
 
+        self.formatter.start_hash(key, size as u32, self.last_expiretime, None);
+
         loop {
-            let next_byte = reader.read_byte().unwrap();
+            let next_byte = try!(reader.read_byte());
 
             if next_byte == 0xFF {
                 break; // End of list.
             }
 
-            let key = self.read_zipmap_entry(next_byte, &mut reader);
-            hash.push(key);
+            let field = try!(self.read_zipmap_entry(next_byte, &mut reader));
 
-            let next_byte = reader.read_byte().unwrap();
-            let _free = reader.read_byte().unwrap();
-            let value = self.read_zipmap_entry(next_byte, &mut reader);
-            hash.push(value);
+            let next_byte = try!(reader.read_byte());
+            let _free = try!(reader.read_byte());
+            let value = try!(self.read_zipmap_entry(next_byte, &mut reader));
+
+            self.formatter.hash_element(key, field.as_slice(), value.as_slice());
 
             if length > 0 {
                 length -= 1;
             }
 
             if length == 0 {
-                assert!(reader.read_byte().unwrap() == 0xFF);
+                let last_byte = try!(reader.read_byte());
+
+                if last_byte != 0xFF {
+                    return Err(IoError {
+                        kind: IoErrorKind::OtherIoError,
+                        desc: "Invalid end byte of zipmap",
+                        detail: None
+                    })
+                }
                 break;
             }
         }
 
-        hash
+        self.formatter.end_hash(key);
+
+        Ok(())
     }
 
-    fn read_set_intset(&mut self, key: &[u8]) -> Vec<i64> {
-        let mut set = vec![];
-
-        let intset = read_blob(&mut self.input);
+    fn read_set_intset(&mut self, key: &[u8]) -> RdbOk {
+        let intset = try!(read_blob(&mut self.input));
 
         let mut reader = MemReader::new(intset);
-        let byte_size = reader.read_le_u32().unwrap();
-        let intset_length = reader.read_le_u32().unwrap();
+        let byte_size = try!(reader.read_le_u32());
+        let intset_length = try!(reader.read_le_u32());
 
         self.formatter.start_set(key, intset_length, self.last_expiretime, None);
 
         for _ in (0..intset_length) {
             let val = match byte_size {
-                2 => reader.read_le_i16().unwrap() as i64,
-                4 => reader.read_le_i32().unwrap() as i64,
-                8 => reader.read_le_i64().unwrap(),
+                2 => try!(reader.read_le_i16()) as i64,
+                4 => try!(reader.read_le_i32()) as i64,
+                8 => try!(reader.read_le_i64()),
                 _ => panic!("unhandled byte size in intset: {}", byte_size)
             };
 
             self.formatter.set_element(key, val.to_string().as_bytes());
-            set.push(val);
         }
 
         self.formatter.end_set(key);
-        set
+
+        Ok(())
     }
 
-    fn read_quicklist(&mut self, key: &[u8]) -> Vec<DataType> {
-        let len = unwrap_or_panic!(read_length(&mut self.input));
+    fn read_quicklist(&mut self, key: &[u8]) -> RdbOk {
+        let len = try!(read_length(&mut self.input));
 
-        // FIXME: We don't know the real length here
-        // Not sure how we do it correctly
-        // Also: We can't call read_list_ziplist as is
         self.formatter.start_set(key, 0, self.last_expiretime, None);
-        let mut list = vec![];
         for _ in (0..len) {
-            let zl = self.read_quicklist_ziplist(key);
-            list.push_all(zl.as_slice());
+            try!(self.read_quicklist_ziplist(key));
         }
         self.formatter.end_set(key);
-        list
+
+        Ok(())
     }
 
-    fn read_type(&mut self, key: &[u8], value_type: u8) -> DataType {
+    fn read_type(&mut self, key: &[u8], value_type: u8) -> RdbOk {
         match value_type {
             encoding_type::STRING => {
-                let val = read_blob(&mut self.input);
+                let val = try!(read_blob(&mut self.input));
                 self.formatter.set(key, val.as_slice(), self.last_expiretime);
-                DataType::String(val)
             },
             encoding_type::LIST => {
-                DataType::List(self.read_linked_list(key))
+                try!(self.read_linked_list(key))
             },
             encoding_type::SET => {
-                DataType::Set(self.read_linked_list(key))
+                try!(self.read_linked_list(key))
             },
             encoding_type::ZSET => {
-                DataType::SortedSet(self.read_sorted_set(key))
+                try!(self.read_sorted_set(key))
             },
             encoding_type::HASH => {
-                DataType::Hash(self.read_hash(key))
+                try!(self.read_hash(key))
             },
             encoding_type::HASH_ZIPMAP => {
-                DataType::Hash(self.read_hash_zipmap())
+                try!(self.read_hash_zipmap(key))
             },
             encoding_type::LIST_ZIPLIST => {
-                DataType::ListOfTypes(self.read_list_ziplist(key))
+                try!(self.read_list_ziplist(key))
             },
             encoding_type::SET_INTSET => {
-                DataType::Intset(self.read_set_intset(key))
+                try!(self.read_set_intset(key))
             },
             encoding_type::ZSET_ZIPLIST => {
-                DataType::SortedSetOfTypes(self.read_list_ziplist(key))
+                try!(self.read_list_ziplist(key))
             },
             encoding_type::HASH_ZIPLIST => {
-                DataType::ListOfTypes(self.read_list_ziplist(key))
+                try!(self.read_list_ziplist(key))
             },
             encoding_type::LIST_QUICKLIST => {
-                DataType::ListOfTypes(self.read_quicklist(key))
+                try!(self.read_quicklist(key))
             },
             _ => { panic!("Value Type not implemented: {}", value_type) }
+        };
+
+        Ok(())
+    }
+
+    fn skip(&mut self, skip_bytes: usize) -> RdbResult<()> {
+        match self.input.read_exact(skip_bytes) {
+            Ok(_) => Ok(()),
+            Err(e) => Err(e)
         }
     }
 
-    fn skip(&mut self, skip_bytes: usize) {
-        let _ = self.input.read_exact(skip_bytes);
-    }
-
-    fn skip_blob(&mut self) {
+    fn skip_blob(&mut self) -> RdbResult<()> {
         let (len, is_encoded) = unwrap_or_panic!(read_length_with_encoding(&mut self.input));
         let mut skip_bytes;
 
@@ -650,10 +678,10 @@ impl<R: Reader, F: RdbParseFormatter, L: RdbFilter> RdbParser<R, F, L> {
             skip_bytes = len;
         }
 
-        self.skip(skip_bytes as usize);
+        self.skip(skip_bytes as usize)
     }
 
-    fn skip_object(&mut self, enc_type: u8) {
+    fn skip_object(&mut self, enc_type: u8) -> RdbResult<()> {
         let blobs_to_skip = match enc_type {
             encoding_type::STRING |
                 encoding_type::HASH_ZIPMAP |
@@ -667,12 +695,15 @@ impl<R: Reader, F: RdbParseFormatter, L: RdbFilter> RdbParser<R, F, L> {
         };
 
         for _ in (0..blobs_to_skip) {
-            self.skip_blob()
+            try!(self.skip_blob())
         }
+
+        Ok(())
     }
 
-    fn skip_key_and_object(&mut self, enc_type: u8) {
-        self.skip_blob();
-        self.skip_object(enc_type);
+    fn skip_key_and_object(&mut self, enc_type: u8) -> RdbResult<()> {
+        try!(self.skip_blob());
+        try!(self.skip_object(enc_type));
+        Ok(())
     }
 }
