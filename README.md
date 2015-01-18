@@ -13,6 +13,14 @@ Online at [rdb.fnordig.de/doc/rdb/][doc].
 cargo build --release
 ```
 
+## Install
+
+```
+make install
+```
+
+You can change the path by setting `PREFIX`. Defaults to `/usr`.
+
 ## Basic operation
 
 rdb-rs exposes just one important method: `parse`.
@@ -71,8 +79,10 @@ value
 Run tests with:
 
 ```
-cargo test
+make test
 ```
+
+This will run the code tests with cargo as well as checking that it can parse all included dump files.
 
 ## Contribute
 
