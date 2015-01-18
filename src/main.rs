@@ -54,7 +54,7 @@ pub fn main() {
             "sortedset" | "sorted-set" | "sorted_set" => rdb::Type::SortedSet,
             "hash" => rdb::Type::Hash,
             _ => {
-                println!("Unknown type: {}", t);
+                println!("Unknown type: {}\n", t);
                 print_usage(program.as_slice(), opts);
                 return;
             }
@@ -65,21 +65,25 @@ pub fn main() {
     if let Some(k) = matches.opt_str("k") {
         let re = match Regex::new(k.as_slice()) {
             Ok(re) => re,
-            Err(err) => panic!("{}", err)
+            Err(err) => {
+                println!("Incorrect regexp: {}\n", err);
+                print_usage(program.as_slice(), opts);
+                return;
+            }
         };
         filter.add_keys(re);
     }
 
+    if matches.free.is_empty() {
+        print_usage(program.as_slice(), opts);
+        return;
+    }
+
+    let path = matches.free[0].clone();
+    let file = File::open(&Path::new(path));
+    let reader = BufferedReader::new(file);
 
     if let Some(f) = matches.opt_str("f") {
-        if matches.free.is_empty() {
-            print_usage(program.as_slice(), opts);
-            return;
-        }
-        let path = matches.free[0].clone();
-        let file = File::open(&Path::new(path));
-        let reader = BufferedReader::new(file);
-
         match f.as_slice() {
             "json" => {
                 let _ = rdb::parse(reader, rdb::formatter::JSON::new(), filter);
@@ -89,26 +93,17 @@ pub fn main() {
             },
             "nil" => {
                 let _ = rdb::parse(reader, rdb::formatter::Nil::new(), filter);
-            }
+            },
             "protocol" => {
                 let _ = rdb::parse(reader, rdb::formatter::Protocol::new(), filter);
-            }
+
+            },
             _ => {
-                println!("Unknown format: {}", f);
-                println!("");
+                println!("Unknown format: {}\n", f);
                 print_usage(program.as_slice(), opts);
             }
         }
-
-        return
     } else {
-        if matches.free.is_empty() {
-            print_usage(program.as_slice(), opts);
-            return;
-        }
-        let path = matches.free[0].clone();
-        let file = File::open(&Path::new(path));
-        let reader = BufferedReader::new(file);
         let _ = rdb::parse(reader, rdb::formatter::JSON::new(), filter);
     }
 }
