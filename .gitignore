@@ -1,2 +1,6 @@
 /target
 /Cargo.lock
+/utils/pkg
+/utils/src
+/utils/rdb-rs
+*.tar.gz

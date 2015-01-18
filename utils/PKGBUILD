@@ -1,0 +1,39 @@
+# Maintainer: Jan-Erik Rediger <badboy at archlinux dot us>
+
+pkgname=rdb-rs-git
+pkgver=r109.9c9c292
+pkgrel=1
+pkgdesc='fast and efficient RDB parsing utility'
+arch=('i686' 'x86_64')
+url='http://rdb.fnordig.de/'
+license=('BSD')
+provides=('rdb')
+depends=('gcc-libs')
+makedepends=('git' 'rust')
+options=('docs' '!strip' 'debug')
+source=('git+https://github.com/badboy/rdb-rs')
+sha1sums=('SKIP')
+
+_gitname='rdb-rs'
+
+pkgver() {
+  cd "$_gitname"
+  printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+build() {
+  cd "$_gitname"
+  make build-release
+}
+
+package() {
+  cd "$_gitname"
+
+  make PREFIX="$pkgdir/usr" install
+
+  install -Dm644 LICENSE \
+    ${pkgdir}/usr/share/licenses/${pkgname}/LICENSE
+}
+
+# vim:set ts=2 sw=2 et:
+
