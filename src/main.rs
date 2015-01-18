@@ -66,7 +66,7 @@ pub fn main() {
         let re = match Regex::new(k.as_slice()) {
             Ok(re) => re,
             Err(err) => {
-                println!("Incorrect regexp: {}\n", err);
+                println!("Incorrect regexp: {:?}\n", err);
                 print_usage(program.as_slice(), opts);
                 return;
             }
