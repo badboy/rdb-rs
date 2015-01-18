@@ -83,19 +83,21 @@ pub fn main() {
     let file = File::open(&Path::new(path));
     let reader = BufferedReader::new(file);
 
+    let mut res = Ok(());
+
     if let Some(f) = matches.opt_str("f") {
         match f.as_slice() {
             "json" => {
-                let _ = rdb::parse(reader, rdb::formatter::JSON::new(), filter);
+                res = rdb::parse(reader, rdb::formatter::JSON::new(), filter);
             },
             "plain" => {
-                let _ = rdb::parse(reader, rdb::formatter::Plain::new(), filter);
+                res = rdb::parse(reader, rdb::formatter::Plain::new(), filter);
             },
             "nil" => {
-                let _ = rdb::parse(reader, rdb::formatter::Nil::new(), filter);
+                res = rdb::parse(reader, rdb::formatter::Nil::new(), filter);
             },
             "protocol" => {
-                let _ = rdb::parse(reader, rdb::formatter::Protocol::new(), filter);
+                res = rdb::parse(reader, rdb::formatter::Protocol::new(), filter);
 
             },
             _ => {
@@ -104,6 +106,20 @@ pub fn main() {
             }
         }
     } else {
-        let _ = rdb::parse(reader, rdb::formatter::JSON::new(), filter);
+        res = rdb::parse(reader, rdb::formatter::JSON::new(), filter);
+    }
+
+    match res {
+        Ok(()) => {},
+        Err(e) => {
+            println!("");
+            let mut stderr = std::io::stderr();
+
+            stderr.write_str(format!("Parsing failed: {}\n", e.desc).as_slice()).unwrap();
+
+            if let Some(detail) = e.detail {
+                stderr.write_str(format!("Details: {}\n", detail).as_slice()).unwrap();
+            }
+        }
     }
 }
