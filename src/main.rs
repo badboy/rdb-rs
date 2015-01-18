@@ -5,7 +5,7 @@ extern crate getopts;
 extern crate regex;
 use std::os;
 use std::io::{BufferedReader, File};
-use getopts::{optopt,optflag,getopts,OptGroup,usage};
+use getopts::{optopt,optmulti,optflag,getopts,OptGroup,usage};
 use regex::Regex;
 
 fn print_usage(program: &str, opts: &[OptGroup]) {
@@ -21,14 +21,18 @@ pub fn main() {
     let opts = &[
         optopt("f", "format", "Format to output. Valid: json, plain, nil, protocol", "FORMAT"),
         optopt("k", "keys", "Keys to show. Can be a regular expression", "KEYS"),
-        optopt("d", "databases", "Database to show", "DB"),
-        optopt("t", "type", "Type to show", "TYPE"),
+        optmulti("d", "databases", "Database to show. Can be specified multiple times", "DB"),
+        optmulti("t", "type", "Type to show. Can be specified multiple times", "TYPE"),
         optflag("h", "help", "print this help menu")
     ];
 
     let matches = match getopts(args.tail(), opts) {
         Ok(m) => { m  }
-        Err(f) => { panic!(f.to_string())  }
+        Err(e) => {
+            println!("{}\n", e);
+            print_usage(program.as_slice(), opts);
+            return;
+        }
     };
 
     if matches.opt_present("h") {
@@ -38,11 +42,11 @@ pub fn main() {
 
     let mut filter = rdb::filter::Simple::new();
 
-    if let Some(d) = matches.opt_str("d") {
-        filter.add_database(d.parse().unwrap());
+    for db in matches.opt_strs("d").iter() {
+        filter.add_database(db.parse().unwrap());
     }
 
-    if let Some(t) = matches.opt_str("t") {
+    for t in matches.opt_strs("t").iter() {
         let typ = match t.as_slice() {
             "string" => rdb::Type::String,
             "list" => rdb::Type::List,
