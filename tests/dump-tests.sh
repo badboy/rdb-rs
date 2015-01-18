@@ -1,8 +1,18 @@
 #!/bin/bash
 
-formats="json plain nil protocol"
+SCRIPTPATH=$(cd "$(dirname "$0")"; pwd)
+SCRIPT="$SCRIPTPATH/$(basename "$0")"
+
+
+DUMP_DIRECTORY="${SCRIPTPATH}/dumps"
+FORMATS="json plain nil protocol"
 
 ARG=$1
+
+if [ ! -d "$DUMP_DIRECTORY" ]; then
+  printf "\n\e[1;31;49m!!! ERROR\e[0m Missing dump directory. Aborting.\n"
+  exit 2
+fi
 
 cargo build $ARG
 
@@ -13,9 +23,9 @@ else
 fi
 
 failure=0
-for f in $formats; do
+for f in $FORMATS; do
   echo "Running $f tests..."
-  for dump in $(find dumps -type f -name "*.rdb"); do
+  for dump in $(find "$DUMP_DIRECTORY" -type f -name "*.rdb"); do
     echo "  with $dump"
     if [ "$f" = "json" ]; then
       $BIN --format $f $dump | json >/dev/null
