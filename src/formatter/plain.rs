@@ -1,5 +1,5 @@
 use formatter::Formatter;
-use std::io;
+use std::old_io;
 
 pub struct Plain {
     out: Box<Writer+'static>
@@ -7,7 +7,7 @@ pub struct Plain {
 
 impl Plain {
     pub fn new() -> Plain {
-        let out = Box::new(io::stdout());
+        let out = Box::new(old_io::stdout());
         Plain { out: out }
     }
 }

@@ -1,7 +1,7 @@
 #![allow(unused_must_use)]
 
 use formatter::Formatter;
-use std::io;
+use std::old_io;
 use std::str;
 use serialize::json;
 use types::EncodingType;
@@ -17,7 +17,7 @@ pub struct JSON {
 
 impl JSON {
     pub fn new() -> JSON {
-        let out = Box::new(io::stdout());
+        let out = Box::new(old_io::stdout());
         JSON {
             out: out,
             is_first_db: true,

@@ -1,4 +1,4 @@
-use std::io::IoError;
+use std::old_io::IoError;
 
 use constants::encoding_type;
 

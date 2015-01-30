@@ -1,6 +1,6 @@
 #![allow(unstable)]
 extern crate rdb;
-use std::io::MemReader;
+use std::old_io::MemReader;
 use rdb::parser::{
     read_length,
     read_length_with_encoding,

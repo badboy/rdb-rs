@@ -69,7 +69,7 @@
 <span class="co">#     -h --help           print this help menu</span></code></pre>
 <h3 id="library">Library</h3>
 <p>Using the library is as easy as calling the <code>rdb::parse</code> function and pass it a stream to read from and a formatter to use.</p>
-<pre class="sourceCode rust"><code class="sourceCode rust"><span class="kw">use</span> std::io::{BufferedReader, File};
+<pre class="sourceCode rust"><code class="sourceCode rust"><span class="kw">use</span> std::old_io::{BufferedReader, File};
 
 <span class="kw">let</span> file = File::open(&amp;Path::new(<span class="st">&quot;dump.rdb&quot;</span>));
 <span class="kw">let</span> reader = BufferedReader::new(file);
