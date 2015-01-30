@@ -4,29 +4,29 @@ extern crate rdb;
 extern crate getopts;
 extern crate regex;
 use std::os;
-use std::io::{BufferedReader, File};
-use getopts::{optopt,optmulti,optflag,getopts,OptGroup,usage};
+use std::old_io::{BufferedReader, File};
+use getopts::Options;
 use regex::Regex;
 
-fn print_usage(program: &str, opts: &[OptGroup]) {
+fn print_usage(program: &str, opts: Options) {
     let brief = format!("Usage: {} [options] dump.rdb", program);
-    print!("{}", usage(brief.as_slice(), opts));
+    print!("{}", opts.usage(brief.as_slice()));
 
 }
 
 pub fn main() {
     let args = os::args();
     let program = args[0].clone();
+    let mut opts = Options::new();
+    
+    opts.optopt("f", "format", "Format to output. Valid: json, plain, nil, protocol", "FORMAT");
+    opts.optopt("k", "keys", "Keys to show. Can be a regular expression", "KEYS");
+    opts.optmulti("d", "databases", "Database to show. Can be specified multiple times", "DB");
+    opts.optmulti("t", "type", "Type to show. Can be specified multiple times", "TYPE");
+    opts.optflag("h", "help", "print this help menu");
 
-    let opts = &[
-        optopt("f", "format", "Format to output. Valid: json, plain, nil, protocol", "FORMAT"),
-        optopt("k", "keys", "Keys to show. Can be a regular expression", "KEYS"),
-        optmulti("d", "databases", "Database to show. Can be specified multiple times", "DB"),
-        optmulti("t", "type", "Type to show. Can be specified multiple times", "TYPE"),
-        optflag("h", "help", "print this help menu")
-    ];
 
-    let matches = match getopts(args.tail(), opts) {
+    let matches = match opts.parse(args.tail()) {
         Ok(m) => { m  }
         Err(e) => {
             println!("{}\n", e);
@@ -113,7 +113,7 @@ pub fn main() {
         Ok(()) => {},
         Err(e) => {
             println!("");
-            let mut stderr = std::io::stderr();
+            let mut stderr = std::old_io::stderr();
 
             stderr.write_str(format!("Parsing failed: {}\n", e.desc).as_slice()).unwrap();
 

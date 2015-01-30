@@ -1,5 +1,5 @@
 use std::{str,f64};
-use std::io::{MemReader,IoError,IoErrorKind};
+use std::old_io::{MemReader,IoError,IoErrorKind};
 use lzf;
 
 use helper;

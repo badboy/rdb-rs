@@ -1,7 +1,7 @@
 #![allow(unused_must_use)]
 
 use formatter::Formatter;
-use std::io;
+use std::old_io;
 use types::EncodingType;
 
 pub struct Protocol {
@@ -11,7 +11,7 @@ pub struct Protocol {
 
 impl Protocol {
     pub fn new() -> Protocol {
-        let out = Box::new(io::stdout());
+        let out = Box::new(old_io::stdout());
         Protocol { out: out, last_expiry: None }
     }
 }

@@ -57,7 +57,7 @@ rdb --help
 Using the library is as easy as calling the `rdb::parse` function and pass it a stream to read from and a formatter to use.
 
 ```rust
-use std::io::{BufferedReader, File};
+use std::old_io::{BufferedReader, File};
 
 let file = File::open(&Path::new("dump.rdb"));
 let reader = BufferedReader::new(file);
