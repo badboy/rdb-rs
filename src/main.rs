@@ -1,5 +1,8 @@
-#![allow(unstable)]
 #![feature(box_syntax)]
+#![feature(core)]
+#![feature(io)]
+#![feature(collections)]
+#![feature(path)]
 extern crate rdb;
 extern crate getopts;
 extern crate regex;
@@ -18,7 +21,7 @@ pub fn main() {
     let args = os::args();
     let program = args[0].clone();
     let mut opts = Options::new();
-    
+
     opts.optopt("f", "format", "Format to output. Valid: json, plain, nil, protocol", "FORMAT");
     opts.optopt("k", "keys", "Keys to show. Can be a regular expression", "KEYS");
     opts.optmulti("d", "databases", "Database to show. Can be specified multiple times", "DB");
