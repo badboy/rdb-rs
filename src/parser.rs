@@ -220,10 +220,34 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
         Ok(())
     }
 
-    fn read_linked_list(&mut self, key: &[u8]) -> RdbOk {
+    fn read_set_linked_list(&mut self, key: &[u8]) -> RdbOk {
         let mut len = try!(read_length(&mut self.input));
 
-        self.formatter.start_list(key, len, self.last_expiretime, EncodingType::LinkedList);
+        self.formatter.start_set(key, len, self.last_expiretime, EncodingType::LinkedList);
+
+        while len > 0 {
+            let blob = try!(read_blob(&mut self.input));
+            self.formatter.list_element(key, blob.as_slice());
+            len -= 1;
+        }
+
+        self.formatter.end_set(key);
+
+        Ok(())
+    }
+
+    fn read_linked_list(&mut self, key: &[u8], typ: Type) -> RdbOk {
+        let mut len = try!(read_length(&mut self.input));
+
+        match typ {
+            Type::List => {
+                self.formatter.start_list(key, len, self.last_expiretime, EncodingType::LinkedList);
+            },
+            Type::Set => {
+                self.formatter.start_set(key, len, self.last_expiretime, EncodingType::LinkedList);
+            },
+            _ => { panic!("Unknown encoding type for linked list") }
+        }
 
         while len > 0 {
             let blob = try!(read_blob(&mut self.input));
@@ -232,6 +256,11 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
         }
 
         self.formatter.end_list(key);
+        match typ {
+            Type::List => self.formatter.end_list(key),
+            Type::Set => self.formatter.end_set(key),
+            _ => { panic!("Unknown encoding type for linked list") }
+        }
 
         Ok(())
     }
@@ -341,29 +370,37 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
 
     fn read_ziplist_entries<T: Reader>(&mut self, reader: &mut T, key: &[u8], zllen: u16) -> RdbOk {
         for _ in (0..zllen) {
-            let entry = try!(self.read_ziplist_entry(reader));
-            match entry {
-                ZiplistEntry::String(ref val) => {
-                    self.formatter.list_element(key, val.as_slice());
-                },
-                ZiplistEntry::Number(val) => {
-                    self.formatter.list_element(key, val.to_string().as_bytes());
-                }
-            }
+            let entry = match try!(self.read_ziplist_entry(reader)) {
+                ZiplistEntry::String(ref val) => val.as_slice(),
+                ZiplistEntry::Number(val) => val.to_string().as_bytes()
+            };
+            self.formatter.list_element(key, entry);
         }
 
         Ok(())
     }
 
-    fn read_list_ziplist(&mut self, key: &[u8]) -> RdbOk {
+    fn read_list_ziplist(&mut self, key: &[u8], typ: Type) -> RdbOk {
         let ziplist = try!(read_blob(&mut self.input));
         let raw_length = ziplist.len() as u64;
 
         let mut reader = MemReader::new(ziplist);
         let (_zlbytes, _zltail, zllen) = try!(read_ziplist_metadata(&mut reader));
 
-        self.formatter.start_list(key, zllen as u32, self.last_expiretime,
-                                  EncodingType::Ziplist(raw_length));
+        match typ {
+            Type::List => {
+                self.formatter.start_list(key, zllen as u32,
+                                          self.last_expiretime,
+                                          EncodingType::Ziplist(raw_length));
+            },
+            Type::Set => {
+
+            },
+            Type::Hash => {
+
+            },
+            _ => panic!("Unknown encoding type in ziplist")
+        }
 
         try!(self.read_ziplist_entries(&mut reader, key, zllen));
 
@@ -519,10 +556,10 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
                 self.formatter.set(key, val.as_slice(), self.last_expiretime);
             },
             encoding_type::LIST => {
-                try!(self.read_linked_list(key))
+                try!(self.read_linked_list(key, Type::List))
             },
             encoding_type::SET => {
-                try!(self.read_linked_list(key))
+                try!(self.read_linked_list(key, Type::Set))
             },
             encoding_type::ZSET => {
                 try!(self.read_sorted_set(key))
@@ -534,16 +571,16 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
                 try!(self.read_hash_zipmap(key))
             },
             encoding_type::LIST_ZIPLIST => {
-                try!(self.read_list_ziplist(key))
+                try!(self.read_list_ziplist(key, Type::List))
             },
             encoding_type::SET_INTSET => {
                 try!(self.read_set_intset(key))
             },
             encoding_type::ZSET_ZIPLIST => {
-                try!(self.read_list_ziplist(key))
+                try!(self.read_list_ziplist(key, Type::SortedSet))
             },
             encoding_type::HASH_ZIPLIST => {
-                try!(self.read_list_ziplist(key))
+                try!(self.read_list_ziplist(key, Type::Hash))
             },
             encoding_type::LIST_QUICKLIST => {
                 try!(self.read_quicklist(key))

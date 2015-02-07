@@ -35,3 +35,13 @@ macro_rules! try_or_ok {
         e => e
     })
 }
+
+macro_rules! unpack_ziplist_entry {
+    ($data:expr) => ({
+        let entry = try!($data);
+        match entry {
+            ZiplistEntry::String(ref val) => val.as_slice(),
+            ZiplistEntry::Number(val) => val.to_string().as_bytes()
+        }
+    })
+}
