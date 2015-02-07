@@ -368,20 +368,12 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
         Ok(ZiplistEntry::String(rawval))
     }
 
-    fn read_ziplist_entries<T: Reader>(&mut self, reader: &mut T, key: &[u8], zllen: u16) -> RdbOk {
-        for _ in (0..zllen) {
-            let entry = try!(self.read_ziplist_entry(reader));
-            match entry {
-                ZiplistEntry::String(ref val) => {
-                    self.formatter.list_element(key, val.as_slice());
-                },
-                ZiplistEntry::Number(val) => {
-                    self.formatter.list_element(key, val.to_string().as_bytes());
-                }
-            }
+    fn read_ziplist_entry_string<T: Reader>(& mut self, reader: &mut T) -> RdbResult<Vec<u8>> {
+        let entry = try!(self.read_ziplist_entry(reader));
+        match entry {
+            ZiplistEntry::String(val) => Ok(val),
+            ZiplistEntry::Number(val) => Ok(val.to_string().into_bytes())
         }
-
-        Ok(())
     }
 
     fn read_list_ziplist(&mut self, key: &[u8], typ: Type) -> RdbOk {
@@ -410,7 +402,10 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
             _ => panic!("Unknown encoding type in ziplist: {:?}", typ)
         }
 
-        try!(self.read_ziplist_entries(&mut reader, key, zllen));
+        for _ in (0..zllen) {
+            let entry = try!(self.read_ziplist_entry_string(&mut reader));
+            self.formatter.list_element(key, entry.as_slice());
+        }
 
         let last_byte = try!(reader.read_byte());
         if last_byte != 0xFF {
@@ -438,7 +433,10 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
         let mut reader = MemReader::new(ziplist);
         let (_zlbytes, _zltail, zllen) = try!(read_ziplist_metadata(&mut reader));
 
-        try!(self.read_ziplist_entries(&mut reader, key, zllen));
+        for _ in (0..zllen) {
+            let entry = try!(self.read_ziplist_entry_string(&mut reader));
+            self.formatter.list_element(key, entry.as_slice());
+        }
 
         let last_byte = try!(reader.read_byte());
         if last_byte != 0xFF {
