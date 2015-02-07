@@ -34,19 +34,19 @@ impl Formatter for Plain {
 
     fn set(&mut self, key: &[u8], value: &[u8], _expiry: Option<u64>) {
         self.write_line_start();
-        self.out.write(key.as_slice());
+        self.out.write_all(key.as_slice());
         self.out.write_str(" -> ");
 
-        self.out.write(value.as_slice());
+        self.out.write_all(value.as_slice());
         self.out.write_str("\n");
         self.out.flush();
     }
 
     fn aux_field(&mut self, key: &[u8], value: &[u8]) {
         self.out.write_str("aux ");
-        self.out.write(key.as_slice());
+        self.out.write_all(key.as_slice());
         self.out.write_str(" -> ");
-        self.out.write(value.as_slice());
+        self.out.write_all(value.as_slice());
         self.out.write_str("\n");
         self.out.flush();
     }
@@ -54,11 +54,11 @@ impl Formatter for Plain {
     fn hash_element(&mut self, key: &[u8], field: &[u8], value: &[u8]) {
         self.write_line_start();
 
-        self.out.write(key.as_slice());
+        self.out.write_all(key.as_slice());
         self.out.write_str(" . ");
-        self.out.write(field.as_slice());
+        self.out.write_all(field.as_slice());
         self.out.write_str(" -> ");
-        self.out.write(value.as_slice());
+        self.out.write_all(value.as_slice());
         self.out.write_str("\n");
         self.out.flush();
     }
@@ -66,9 +66,9 @@ impl Formatter for Plain {
     fn set_element(&mut self, key: &[u8], member: &[u8]) {
         self.write_line_start();
 
-        self.out.write(key.as_slice());
+        self.out.write_all(key.as_slice());
         self.out.write_str(" { ");
-        self.out.write(member.as_slice());
+        self.out.write_all(member.as_slice());
         self.out.write_str(" } ");
         self.out.write_str("\n");
         self.out.flush();
@@ -81,10 +81,10 @@ impl Formatter for Plain {
     fn list_element(&mut self, key: &[u8], value: &[u8]) {
         self.write_line_start();
 
-        self.out.write(key.as_slice());
+        self.out.write_all(key.as_slice());
         self.out.write_str(format!("[{}]", self.index).as_slice());
         self.out.write_str(" -> ");
-        self.out.write(value.as_slice());
+        self.out.write_all(value.as_slice());
         self.out.write_str("\n");
         self.out.flush();
         self.index += 1;
@@ -99,10 +99,10 @@ impl Formatter for Plain {
                           score: f64, member: &[u8]) {
         self.write_line_start();
 
-        self.out.write(key.as_slice());
+        self.out.write_all(key.as_slice());
         self.out.write_str(format!("[{}]", self.index).as_slice());
         self.out.write_str(" -> {");
-        self.out.write(member.as_slice());
+        self.out.write_all(member.as_slice());
         self.out.write_str(format!(", score={}", score).as_slice());
         self.out.write_str("}\n");
         self.out.flush();

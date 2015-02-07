@@ -19,13 +19,13 @@ impl Protocol {
 impl Protocol {
     fn emit(&mut self, args: Vec<&[u8]>) {
         self.out.write_str("*");
-        self.out.write(args.len().to_string().as_bytes());
+        self.out.write_all(args.len().to_string().as_bytes());
         self.out.write_str("\r\n");
         for arg in args.iter() {
             self.out.write_str("$");
-            self.out.write(arg.len().to_string().as_bytes());
+            self.out.write_all(arg.len().to_string().as_bytes());
             self.out.write_str("\r\n");
-            self.out.write(arg.as_slice());
+            self.out.write_all(arg.as_slice());
             self.out.write_str("\r\n");
         }
     }

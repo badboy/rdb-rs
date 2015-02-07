@@ -71,7 +71,8 @@
 //! ```
 
 #![feature(slicing_syntax)]
-#![allow(unstable)]
+#![feature(io)]
+#![feature(core)]
 
 extern crate lzf;
 extern crate "rustc-serialize" as serialize;
