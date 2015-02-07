@@ -2,7 +2,7 @@ use std::old_io::IoError;
 
 use constants::encoding_type;
 
-#[derive(Show,Clone)]
+#[derive(Debug,Clone)]
 pub enum ZiplistEntry {
     String(Vec<u8>),
     Number(i64),
