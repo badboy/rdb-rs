@@ -420,9 +420,48 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
         match typ {
             Type::List => self.formatter.end_list(key),
             Type::Set => self.formatter.end_set(key),
-            Type::Hash => self.formatter.end_sorted_set(key),
+            Type::SortedSet => self.formatter.end_sorted_set(key),
             _ => panic!("Unknown encoding type in ziplist")
         }
+
+        Ok(())
+    }
+
+    fn read_sortedset_ziplist(&mut self, key: &[u8]) -> RdbOk {
+        let ziplist = try!(read_blob(&mut self.input));
+        let raw_length = ziplist.len() as u64;
+
+        let mut reader = MemReader::new(ziplist);
+        let (_zlbytes, _zltail, zllen) = try!(read_ziplist_metadata(&mut reader));
+
+        self.formatter.start_sorted_set(key, zllen as u32,
+                                        self.last_expiretime,
+                                        EncodingType::Ziplist(raw_length));
+
+        assert!(zllen%2 == 0);
+        let zllen = zllen / 2;
+
+        for _ in (0..zllen) {
+            let entry = try!(self.read_ziplist_entry_string(&mut reader));
+            let score = try!(self.read_ziplist_entry_string(&mut reader));
+            let score = str::from_utf8(score.as_slice())
+                .unwrap()
+                .parse::<f64>().unwrap();
+            self.formatter.sorted_set_element(key,
+                                              score,
+                                              entry.as_slice());
+        }
+
+        let last_byte = try!(reader.read_byte());
+        if last_byte != 0xFF {
+            return Err(IoError {
+                kind: IoErrorKind::OtherIoError,
+                desc: "Invalid end byte of ziplist",
+                detail: None
+            })
+        }
+
+        self.formatter.end_sorted_set(key);
 
         Ok(())
     }
@@ -589,7 +628,7 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
                 try!(self.read_set_intset(key))
             },
             encoding_type::ZSET_ZIPLIST => {
-                try!(self.read_list_ziplist(key, Type::SortedSet))
+                try!(self.read_sortedset_ziplist(key))
             },
             encoding_type::HASH_ZIPLIST => {
                 try!(self.read_list_ziplist(key, Type::Hash))
