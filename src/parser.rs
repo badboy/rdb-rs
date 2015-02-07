@@ -370,11 +370,15 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
 
     fn read_ziplist_entries<T: Reader>(&mut self, reader: &mut T, key: &[u8], zllen: u16) -> RdbOk {
         for _ in (0..zllen) {
-            let entry = match try!(self.read_ziplist_entry(reader)) {
-                ZiplistEntry::String(ref val) => val.as_slice(),
-                ZiplistEntry::Number(val) => val.to_string().as_bytes()
-            };
-            self.formatter.list_element(key, entry);
+            let entry = try!(self.read_ziplist_entry(reader));
+            match entry {
+                ZiplistEntry::String(ref val) => {
+                    self.formatter.list_element(key, val.as_slice());
+                },
+                ZiplistEntry::Number(val) => {
+                    self.formatter.list_element(key, val.to_string().as_bytes());
+                }
+            }
         }
 
         Ok(())
