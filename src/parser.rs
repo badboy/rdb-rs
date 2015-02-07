@@ -172,7 +172,9 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
                     self.formatter.end_rdb();
 
                     let checksum = try!(self.input.read_to_end());
-                    self.formatter.checksum(checksum.as_slice());
+                    if checksum.len() > 0 {
+                        self.formatter.checksum(checksum.as_slice());
+                    }
                     break;
                 },
                 op_code::EXPIRETIME_MS => {
