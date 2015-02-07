@@ -398,12 +398,16 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
                                           EncodingType::Ziplist(raw_length));
             },
             Type::Set => {
-
+                self.formatter.start_set(key, zllen as u32,
+                                          self.last_expiretime,
+                                          EncodingType::Ziplist(raw_length));
             },
-            Type::Hash => {
-
+            Type::SortedSet => {
+                self.formatter.start_sorted_set(key, zllen as u32,
+                                          self.last_expiretime,
+                                          EncodingType::Ziplist(raw_length));
             },
-            _ => panic!("Unknown encoding type in ziplist")
+            _ => panic!("Unknown encoding type in ziplist: {:?}", typ)
         }
 
         try!(self.read_ziplist_entries(&mut reader, key, zllen));
@@ -418,6 +422,12 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
         }
 
         self.formatter.end_list(key);
+        match typ {
+            Type::List => self.formatter.end_list(key),
+            Type::Set => self.formatter.end_set(key),
+            Type::Hash => self.formatter.end_sorted_set(key),
+            _ => panic!("Unknown encoding type in ziplist")
+        }
 
         Ok(())
     }
