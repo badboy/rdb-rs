@@ -74,7 +74,7 @@
 #![allow(unstable)]
 
 extern crate lzf;
-extern crate serialize;
+extern crate "rustc-serialize" as serialize;
 extern crate regex;
 
 #[doc(hidden)]

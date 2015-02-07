@@ -31,7 +31,7 @@ impl JSON {
 
 fn encode_to_ascii(value: &[u8]) -> String {
     let s = unsafe{str::from_utf8_unchecked(value)};
-    json::encode(&s)
+    json::encode(&s).unwrap()
 }
 
 impl JSON {
