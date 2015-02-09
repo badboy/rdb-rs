@@ -21,12 +21,15 @@ build:
 build-release:
 	cargo build --release
 
-test: dump-test unit-test
+test: dump-test eq-test unit-test
 
-dump-test:
+dump-test: build
 	./tests/dump-tests.sh
 
-unit-test:
+eq-test: build
+	./tests/eq-tests.sh
+
+unit-test: build
 	cargo test
 
 www:

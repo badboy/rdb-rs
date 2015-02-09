@@ -5,7 +5,6 @@ SCRIPT="$SCRIPTPATH/$(basename "$0")"
 
 
 DUMP_DIRECTORY="${SCRIPTPATH}/dumps"
-FORMATS="json plain nil protocol"
 
 ARG=$1
 
@@ -23,21 +22,20 @@ else
 fi
 
 failure=0
-for f in $FORMATS; do
-  echo "Running $f tests..."
-  for dump in $(find "$DUMP_DIRECTORY" -type f -name "*.rdb"); do
-    echo "  with $dump"
-    if [ "$f" = "json" ]; then
-      $BIN --format $f $dump | json >/dev/null
-    else
-      $BIN --format $f $dump >/dev/null
-    fi
+for dump in $(find "$DUMP_DIRECTORY" -type f -name "*.rdb"); do
+  file=$(basename $dump)
+  echo "  with $file"
 
-    if [ $? -ne 0 ]; then
-      echo "Failure with '$dump' (Format: $f)"
-      failure=1
-    fi
-  done
+  json=$(basename $dump) 
+  json=${json/.rdb/.json}
+  diff -q  \
+    <($BIN --format json $dump 2>/dev/null) \
+    $DUMP_DIRECTORY/json/$json >/dev/null 2>&1
+
+  if [ $? -ne 0 ]; then
+    echo "Failure with '$file'"
+    failure=1
+  fi
 done
 
 
