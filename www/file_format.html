@@ -373,18 +373,23 @@ FF                          ## End of RDB file indicator
 </tr>
 <tr class="even">
 <td align="left"><code>1100____</code></td>
-<td align="left">1 byte</td>
-<td align="left">Integer encoded as 16 bit Integer (2 bytes)</td>
+<td align="left">3 bytes</td>
+<td align="left">Integer encoded as 16 bit signed (2 bytes)</td>
 </tr>
 <tr class="odd">
 <td align="left"><code>1101____</code></td>
-<td align="left">1 byte</td>
-<td align="left">Integer encoded as 32 bit Integer (4 bytes)</td>
+<td align="left">5 bytes</td>
+<td align="left">Integer encoded as 32 bit signed (4 bytes)</td>
 </tr>
 <tr class="even">
 <td align="left"><code>1110____</code></td>
-<td align="left">1 byte</td>
-<td align="left">Integer encoded as 64 bit Integer (8 bytes)</td>
+<td align="left">9 bytes</td>
+<td align="left">Integer encoded as 64 bit signed (8 bytes)</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>1111____</code></td>
+<td align="left">4 bytes</td>
+<td align="left">Integer encoded as 24 bit signed (3 bytes)</td>
 </tr>
 </tbody>
 </table>

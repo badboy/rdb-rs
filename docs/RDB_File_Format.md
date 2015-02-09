@@ -356,9 +356,10 @@ The various encodings of this flag are shown below:
 | `00pppppp` | 1 byte | String value with length less than or equal to 63 bytes (6 bits) |
 | `01pppppp|qqqqqqqq` | 2 bytes | String value with length less than or equal to 16383 bytes (14 bits) |
 | `10______|<4 byte>` | 5 bytes | Next 4 byte contain an unsigned int. String value with length greater than or equal to 16384 bytes |
-| `1100____` | 1 byte | Integer encoded as 16 bit Integer (2 bytes) |
-| `1101____` | 1 byte | Integer encoded as 32 bit Integer (4 bytes) |
-| `1110____` | 1 byte | Integer encoded as 64 bit Integer (8 bytes) |
+| `1100____` | 3 bytes | Integer encoded as 16 bit signed (2 bytes) |
+| `1101____` | 5 bytes | Integer encoded as 32 bit signed (4 bytes) |
+| `1110____` | 9 bytes | Integer encoded as 64 bit signed (8 bytes) |
+| `1111____` | 4 bytes | Integer encoded as 24 bit signed (3 bytes) |
 
 `raw-byte`: After the special flag, the raw bytes of entry follow. The number of bytes was previously determined as part of the special flag.
 
