@@ -220,22 +220,6 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
         Ok(())
     }
 
-    fn read_set_linked_list(&mut self, key: &[u8]) -> RdbOk {
-        let mut len = try!(read_length(&mut self.input));
-
-        self.formatter.start_set(key, len, self.last_expiretime, EncodingType::LinkedList);
-
-        while len > 0 {
-            let blob = try!(read_blob(&mut self.input));
-            self.formatter.list_element(key, blob.as_slice());
-            len -= 1;
-        }
-
-        self.formatter.end_set(key);
-
-        Ok(())
-    }
-
     fn read_linked_list(&mut self, key: &[u8], typ: Type) -> RdbOk {
         let mut len = try!(read_length(&mut self.input));
 
@@ -382,31 +366,16 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
         }
     }
 
-    fn read_list_ziplist(&mut self, key: &[u8], typ: Type) -> RdbOk {
+    fn read_list_ziplist(&mut self, key: &[u8]) -> RdbOk {
         let ziplist = try!(read_blob(&mut self.input));
         let raw_length = ziplist.len() as u64;
 
         let mut reader = MemReader::new(ziplist);
         let (_zlbytes, _zltail, zllen) = try!(read_ziplist_metadata(&mut reader));
 
-        match typ {
-            Type::List => {
-                self.formatter.start_list(key, zllen as u32,
-                                          self.last_expiretime,
-                                          EncodingType::Ziplist(raw_length));
-            },
-            Type::Set => {
-                self.formatter.start_set(key, zllen as u32,
-                                          self.last_expiretime,
-                                          EncodingType::Ziplist(raw_length));
-            },
-            Type::SortedSet => {
-                self.formatter.start_sorted_set(key, zllen as u32,
-                                          self.last_expiretime,
-                                          EncodingType::Ziplist(raw_length));
-            },
-            _ => panic!("Unknown encoding type in ziplist: {:?}", typ)
-        }
+        self.formatter.start_list(key, zllen as u32,
+                                  self.last_expiretime,
+                                  EncodingType::Ziplist(raw_length));
 
         for _ in (0..zllen) {
             let entry = try!(self.read_ziplist_entry_string(&mut reader));
@@ -422,12 +391,41 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
             })
         }
 
-        match typ {
-            Type::List => self.formatter.end_list(key),
-            Type::Set => self.formatter.end_set(key),
-            Type::SortedSet => self.formatter.end_sorted_set(key),
-            _ => panic!("Unknown encoding type in ziplist")
+        self.formatter.end_list(key);
+
+        Ok(())
+    }
+
+    fn read_hash_ziplist(&mut self, key: &[u8]) -> RdbOk {
+        let ziplist = try!(read_blob(&mut self.input));
+        let raw_length = ziplist.len() as u64;
+
+        let mut reader = MemReader::new(ziplist);
+        let (_zlbytes, _zltail, zllen) = try!(read_ziplist_metadata(&mut reader));
+
+        assert!(zllen%2 == 0);
+        let zllen = zllen / 2;
+
+        self.formatter.start_hash(key, zllen as u32,
+                                  self.last_expiretime,
+                                  EncodingType::Ziplist(raw_length));
+
+        for _ in (0..zllen) {
+            let field = try!(self.read_ziplist_entry_string(&mut reader));
+            let value = try!(self.read_ziplist_entry_string(&mut reader));
+            self.formatter.hash_element(key, field.as_slice(), value.as_slice());
         }
+
+        let last_byte = try!(reader.read_byte());
+        if last_byte != 0xFF {
+            return Err(IoError {
+                kind: IoErrorKind::OtherIoError,
+                desc: "Invalid end byte of ziplist",
+                detail: None
+            })
+        }
+
+        self.formatter.end_hash(key);
 
         Ok(())
     }
@@ -452,9 +450,7 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
             let score = str::from_utf8(score.as_slice())
                 .unwrap()
                 .parse::<f64>().unwrap();
-            self.formatter.sorted_set_element(key,
-                                              score,
-                                              entry.as_slice());
+            self.formatter.sorted_set_element(key, score, entry.as_slice());
         }
 
         let last_byte = try!(reader.read_byte());
@@ -627,7 +623,7 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
                 try!(self.read_hash_zipmap(key))
             },
             encoding_type::LIST_ZIPLIST => {
-                try!(self.read_list_ziplist(key, Type::List))
+                try!(self.read_list_ziplist(key))
             },
             encoding_type::SET_INTSET => {
                 try!(self.read_set_intset(key))
@@ -636,7 +632,7 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
                 try!(self.read_sortedset_ziplist(key))
             },
             encoding_type::HASH_ZIPLIST => {
-                try!(self.read_list_ziplist(key, Type::Hash))
+                try!(self.read_hash_ziplist(key))
             },
             encoding_type::LIST_QUICKLIST => {
                 try!(self.read_quicklist(key))
