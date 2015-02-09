@@ -168,5 +168,4 @@ impl Formatter for JSON {
         self.out.write_str(":");
         self.write_value(score.to_string().as_bytes());
     }
-
 }

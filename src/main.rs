@@ -3,6 +3,8 @@
 #![feature(io)]
 #![feature(collections)]
 #![feature(path)]
+#![feature(os)]
+
 extern crate rdb;
 extern crate getopts;
 extern crate regex;

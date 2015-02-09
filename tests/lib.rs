@@ -1,4 +1,4 @@
-#![allow(unstable)]
+#![feature(io)]
 extern crate rdb;
 use std::old_io::MemReader;
 use rdb::parser::{
