@@ -343,13 +343,20 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
                         match flag & 0xF {
                             0 => {
                                 let bytes = try!(ziplist.read_exact(3));
-                                number_value = ((bytes[0] as i64) << 16) ^
-                                    ((bytes[1] as i64) << 8) ^
-                                    (bytes[2] as i64);
+                                let number : i32 = (
+                                    ((bytes[2] as i32) << 24) ^
+                                    ((bytes[1] as i32) << 16) ^
+                                    ((bytes[0] as i32) << 8) ^
+                                    48) >> 8;
+
+                                number_value = number as i64;
                             },
                             0xE => {
-                                number_value = try!(ziplist.read_byte()) as i64 },
-                                _ => { number_value = (flag & 0xF) as i64 - 1; }
+                                number_value = try!(ziplist.read_i8()) as i64;
+                            },
+                            _ => {
+                                number_value = (flag & 0xF) as i64 - 1;
+                            }
                         }
                     },
                     _ => {
