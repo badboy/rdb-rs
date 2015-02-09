@@ -27,11 +27,7 @@ for f in $FORMATS; do
   echo "Running $f tests..."
   for dump in $(find "$DUMP_DIRECTORY" -type f -name "*.rdb"); do
     echo "  with $dump"
-    if [ "$f" = "json" ]; then
-      $BIN --format $f $dump | json >/dev/null
-    else
-      $BIN --format $f $dump >/dev/null
-    fi
+    $BIN --format $f $dump >/dev/null
 
     if [ $? -ne 0 ]; then
       echo "Failure with '$dump' (Format: $f)"
