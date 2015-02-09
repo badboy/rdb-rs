@@ -255,7 +255,6 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
             len -= 1;
         }
 
-        self.formatter.end_list(key);
         match typ {
             Type::List => self.formatter.end_list(key),
             Type::Set => self.formatter.end_set(key),
@@ -416,7 +415,6 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
             })
         }
 
-        self.formatter.end_list(key);
         match typ {
             Type::List => self.formatter.end_list(key),
             Type::Set => self.formatter.end_set(key),
