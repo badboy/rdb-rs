@@ -3,12 +3,12 @@
 #![feature(io)]
 #![feature(collections)]
 #![feature(path)]
-#![feature(os)]
+#![feature(env)]
 
 extern crate rdb;
 extern crate getopts;
 extern crate regex;
-use std::os;
+use std::env;
 use std::old_io::{BufferedReader, File};
 use getopts::Options;
 use regex::Regex;
@@ -20,8 +20,8 @@ fn print_usage(program: &str, opts: Options) {
 }
 
 pub fn main() {
-    let args = os::args();
-    let program = args[0].clone();
+    let mut args = env::args();
+    let program = args.next().unwrap();
     let mut opts = Options::new();
 
     opts.optopt("f", "format", "Format to output. Valid: json, plain, nil, protocol", "FORMAT");
@@ -31,7 +31,7 @@ pub fn main() {
     opts.optflag("h", "help", "print this help menu");
 
 
-    let matches = match opts.parse(args.tail()) {
+    let matches = match opts.parse(args) {
         Ok(m) => { m  }
         Err(e) => {
             println!("{}\n", e);
