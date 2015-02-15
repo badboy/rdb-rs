@@ -1,7 +1,6 @@
 #![feature(box_syntax)]
 #![feature(core)]
 #![feature(io)]
-#![feature(collections)]
 #![feature(path)]
 #![feature(env)]
 
