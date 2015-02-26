@@ -1,7 +1,7 @@
 #![feature(box_syntax)]
 #![feature(core)]
-#![feature(io)]
-#![feature(path)]
+#![feature(old_io)]
+#![feature(old_path)]
 #![feature(env)]
 
 extern crate rdb;
