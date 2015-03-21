@@ -22,9 +22,11 @@
 //!
 //! ```rust,no_run
 //! # #![allow(unstable)]
-//! # use std::io::{BufferedReader, File};
-//! let file = File::open(&Path::new("dump.rdb"));
-//! let reader = BufferedReader::new(file);
+//! # use std::io::BufReader;
+//! # use std::fs::File;
+//! # use std::path::Path;
+//! let file = File::open(&Path::new("dump.rdb")).unwrap();
+//! let reader = BufReader::new(file);
 //! rdb::parse(reader, rdb::formatter::JSON::new(), rdb::filter::Simple::new());
 //! ```
 //!
