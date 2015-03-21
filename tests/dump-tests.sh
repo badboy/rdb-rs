@@ -19,7 +19,7 @@ cargo build $ARG
 if [ "$ARG" = "--release" ]; then
   BIN=./target/release/rdb
 else
-  BIN=./target/rdb
+  BIN=./target/debug/rdb
 fi
 
 failure=0
