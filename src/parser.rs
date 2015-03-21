@@ -1,5 +1,8 @@
 use std::{str,f64};
-use std::old_io::{MemReader,IoError,IoErrorKind};
+use std::io::Error as IoError;
+use std::io::ErrorKind as IoErrorKind;
+use std::io::{Read,Cursor};
+use byteorder::{LittleEndian,BigEndian,ReadBytesExt};
 use lzf;
 
 use helper;
@@ -28,18 +31,32 @@ pub use types::{
     EncodingType
 };
 
-pub struct RdbParser<R: Reader, F: Formatter, L: Filter> {
+pub struct RdbParser<R: Read, F: Formatter, L: Filter> {
     input: R,
     formatter: F,
     filter: L,
     last_expiretime: Option<u64>
 }
 
-pub fn read_length_with_encoding<R: Reader>(input: &mut R) -> RdbResult<(u32, bool)> {
+#[inline]
+fn other_error(desc: &'static str) -> IoError {
+    IoError::new(IoErrorKind::Other, desc, None)
+}
+
+fn read_exact<T: Read>(reader: &mut T, len: usize) -> RdbResult<Vec<u8>> {
+    let mut buf = Vec::with_capacity(len);
+    match reader.read(&mut buf) {
+        Ok(n) if n == len => Ok(buf),
+        Ok(n) => Err(other_error("Could not read enough bytes from Reader")),
+        Err(e) => Err(e)
+    }
+}
+
+pub fn read_length_with_encoding<R: Read>(input: &mut R) -> RdbResult<(u32, bool)> {
     let mut length;
     let mut is_encoded = false;
 
-    let enc_type = try!(input.read_byte());
+    let enc_type = try!(input.read_u8());
 
     match (enc_type & 0xC0) >> 6 {
         constant::RDB_ENCVAL => {
@@ -50,24 +67,24 @@ pub fn read_length_with_encoding<R: Reader>(input: &mut R) -> RdbResult<(u32, bo
             length = (enc_type & 0x3F) as u32;
         },
         constant::RDB_14BITLEN => {
-            let next_byte = try!(input.read_byte());
+            let next_byte = try!(input.read_u8());
             length = (((enc_type & 0x3F) as u32) <<8) | next_byte as u32;
         },
         _ => {
-            length = try!(input.read_be_u32());
+            length = try!(input.read_u32::<BigEndian>());
         }
     }
 
     Ok((length, is_encoded))
 }
 
-pub fn read_length<R: Reader>(input: &mut R) -> RdbResult<u32> {
+pub fn read_length<R: Read>(input: &mut R) -> RdbResult<u32> {
     let (length, _) = try!(read_length_with_encoding(input));
     Ok(length)
 }
 
-pub fn verify_magic<R: Reader>(input: &mut R) -> RdbOk {
-    let magic = try!(input.read_exact(5));
+pub fn verify_magic<R: Read>(input: &mut R) -> RdbOk {
+    let magic = try!(read_exact(input, 5));
 
     // Meeeeeh.
     let is_ok = magic[0] == constant::RDB_MAGIC.as_bytes()[0] &&
@@ -79,16 +96,12 @@ pub fn verify_magic<R: Reader>(input: &mut R) -> RdbOk {
     if is_ok {
         Ok(())
     } else {
-        Err(IoError {
-            kind: IoErrorKind::OtherIoError,
-            desc: "Invalid magic string",
-            detail: None
-        })
+        Err(other_error("Invalid magic string"))
     }
 }
 
-pub fn verify_version<R: Reader>(input: &mut R) -> RdbOk {
-    let version = try!(input.read_exact(4));
+pub fn verify_version<R: Read>(input: &mut R) -> RdbOk {
+    let version = try!(read_exact(input, 4));
 
     let version = (version[0]-48) as u32 * 1000 +
         (version[1]-48) as u32 * 100 +
@@ -101,26 +114,22 @@ pub fn verify_version<R: Reader>(input: &mut R) -> RdbOk {
     if is_ok {
         Ok(())
     } else {
-        Err(IoError {
-            kind: IoErrorKind::OtherIoError,
-            desc: "Version not supported",
-            detail: None
-        })
+        Err(other_error("Version not supported"))
     }
 }
 
-pub fn read_blob<R: Reader>(input: &mut R) -> RdbResult<Vec<u8>> {
+pub fn read_blob<R: Read>(input: &mut R) -> RdbResult<Vec<u8>> {
     let (length, is_encoded) = try!(read_length_with_encoding(input));
 
     if is_encoded {
         let result = match length {
             encoding::INT8 => { helper::int_to_vec(try!(input.read_i8()) as i32) },
-            encoding::INT16 => { helper::int_to_vec(try!(input.read_le_i16()) as i32) },
-            encoding::INT32 => { helper::int_to_vec(try!(input.read_le_i32()) as i32) },
+            encoding::INT16 => { helper::int_to_vec(try!(input.read_i16::<LittleEndian>()) as i32) },
+            encoding::INT32 => { helper::int_to_vec(try!(input.read_i32::<LittleEndian>()) as i32) },
             encoding::LZF => {
                 let compressed_length = try!(read_length(input));
                 let real_length = try!(read_length(input));
-                let data = try!(input.read_exact(compressed_length as usize));
+                let data = try!(read_exact(input, compressed_length as usize));
                 lzf::decompress(data.as_slice(), real_length as usize).unwrap()
             },
             _ => { panic!("Unknown encoding: {}", length) }
@@ -128,19 +137,19 @@ pub fn read_blob<R: Reader>(input: &mut R) -> RdbResult<Vec<u8>> {
 
         Ok(result)
     } else {
-        input.read_exact(length as usize)
+        read_exact(input, length as usize)
     }
 }
 
-fn read_ziplist_metadata<T: Reader>(input: &mut T) -> RdbResult<(u32, u32, u16)> {
-    let zlbytes = try!(input.read_le_u32());
-    let zltail = try!(input.read_le_u32());
-    let zllen = try!(input.read_le_u16());
+fn read_ziplist_metadata<T: Read>(input: &mut T) -> RdbResult<(u32, u32, u16)> {
+    let zlbytes = try!(input.read_u32::<LittleEndian>());
+    let zltail = try!(input.read_u32::<LittleEndian>());
+    let zllen = try!(input.read_u16::<LittleEndian>());
 
     Ok((zlbytes, zltail, zllen))
 }
 
-impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
+impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
     pub fn new(input: R, formatter: F, filter: L) -> RdbParser<R, F, L> {
         RdbParser{
             input: input,
@@ -158,7 +167,7 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
 
         let mut last_database : u32 = 0;
         loop {
-            let next_op = try!(self.input.read_byte());
+            let next_op = try!(self.input.read_u8());
 
             match next_op {
                 op_code::SELECTDB => {
@@ -171,18 +180,19 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
                     self.formatter.end_database(last_database);
                     self.formatter.end_rdb();
 
-                    let checksum = try!(self.input.read_to_end());
-                    if checksum.len() > 0 {
+                    let mut checksum = Vec::new();
+                    let len = try!(self.input.read_to_end(&mut checksum));
+                    if len > 0 {
                         self.formatter.checksum(checksum.as_slice());
                     }
                     break;
                 },
                 op_code::EXPIRETIME_MS => {
-                    let expiretime_ms = try!(self.input.read_le_u64());
+                    let expiretime_ms = try!(self.input.read_u64::<LittleEndian>());
                     self.last_expiretime = Some(expiretime_ms);
                 },
                 op_code::EXPIRETIME => {
-                    let expiretime = try!(self.input.read_be_u32());
+                    let expiretime = try!(self.input.read_u32::<BigEndian>());
                     self.last_expiretime = Some(expiretime as u64 * 1000);
                 },
                 op_code::RESIZEDB => {
@@ -255,13 +265,13 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
 
         while set_items > 0 {
             let val = try!(read_blob(&mut self.input));
-            let score_length = try!(self.input.read_byte());
+            let score_length = try!(self.input.read_u8());
             let score = match score_length {
                 253 => { f64::NAN },
                 254 => { f64::INFINITY },
                 255 => { f64::NEG_INFINITY },
                 _ => {
-                    let tmp = try!(self.input.read_exact(score_length as usize));
+                    let tmp = try!(read_exact(&mut self.input, score_length as usize));
                     unsafe{str::from_utf8_unchecked(tmp.as_slice())}.
                         parse::<f64>().unwrap()
                 }
@@ -296,37 +306,37 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
         Ok(())
     }
 
-    fn read_ziplist_entry<T: Reader>(&mut self, ziplist: &mut T) -> RdbResult<ZiplistEntry> {
+    fn read_ziplist_entry<T: Read>(&mut self, ziplist: &mut T) -> RdbResult<ZiplistEntry> {
         // 1. 1 or 5 bytes length of previous entry
-        let byte = try!(ziplist.read_byte());
+        let byte = try!(ziplist.read_u8());
         if byte == 254 {
-            try!(ziplist.read_exact(4));
+            try!(read_exact(ziplist, 4));
         }
 
         let mut length : u64;
         let mut number_value : i64;
 
         // 2. Read flag or number value
-        let flag = try!(ziplist.read_byte());
+        let flag = try!(ziplist.read_u8());
 
         match (flag & 0xC0) >> 6 {
             0 => { length = (flag & 0x3F) as u64 },
             1 => {
-                let next_byte = try!(ziplist.read_byte());
+                let next_byte = try!(ziplist.read_u8());
                 length = (((flag & 0x3F) as u64) << 8) | next_byte as u64;
             },
             2 => {
-                length = try!(ziplist.read_be_u32()) as u64;
+                length = try!(ziplist.read_u32::<BigEndian>()) as u64;
             },
             _ => {
                 match (flag & 0xF0) >> 4 {
-                    0xC => { number_value = try!(ziplist.read_le_i16()) as i64 },
-                    0xD => { number_value = try!(ziplist.read_le_i32()) as i64 },
-                    0xE => { number_value = try!(ziplist.read_le_i64()) as i64 },
+                    0xC => { number_value = try!(ziplist.read_i16::<LittleEndian>()) as i64 },
+                    0xD => { number_value = try!(ziplist.read_i32::<LittleEndian>()) as i64 },
+                    0xE => { number_value = try!(ziplist.read_i64::<LittleEndian>()) as i64 },
                     0xF => {
                         match flag & 0xF {
                             0 => {
-                                let bytes = try!(ziplist.read_exact(3));
+                                let bytes = try!(read_exact(ziplist, 3));
                                 let number : i32 = (
                                     ((bytes[2] as i32) << 24) ^
                                     ((bytes[1] as i32) << 16) ^
@@ -354,11 +364,11 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
         }
 
         // 3. Read value
-        let rawval = try!(ziplist.read_exact(length as usize));
+        let rawval = try!(read_exact(ziplist, length as usize));
         Ok(ZiplistEntry::String(rawval))
     }
 
-    fn read_ziplist_entry_string<T: Reader>(& mut self, reader: &mut T) -> RdbResult<Vec<u8>> {
+    fn read_ziplist_entry_string<T: Read>(& mut self, reader: &mut T) -> RdbResult<Vec<u8>> {
         let entry = try!(self.read_ziplist_entry(reader));
         match entry {
             ZiplistEntry::String(val) => Ok(val),
@@ -370,7 +380,7 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
         let ziplist = try!(read_blob(&mut self.input));
         let raw_length = ziplist.len() as u64;
 
-        let mut reader = MemReader::new(ziplist);
+        let mut reader = Cursor::new(ziplist);
         let (_zlbytes, _zltail, zllen) = try!(read_ziplist_metadata(&mut reader));
 
         self.formatter.start_list(key, zllen as u32,
@@ -382,13 +392,9 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
             self.formatter.list_element(key, entry.as_slice());
         }
 
-        let last_byte = try!(reader.read_byte());
+        let last_byte = try!(reader.read_u8());
         if last_byte != 0xFF {
-            return Err(IoError {
-                kind: IoErrorKind::OtherIoError,
-                desc: "Invalid end byte of ziplist",
-                detail: None
-            })
+            return Err(other_error("Invalid end byte of ziplist"))
         }
 
         self.formatter.end_list(key);
@@ -400,7 +406,7 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
         let ziplist = try!(read_blob(&mut self.input));
         let raw_length = ziplist.len() as u64;
 
-        let mut reader = MemReader::new(ziplist);
+        let mut reader = Cursor::new(ziplist);
         let (_zlbytes, _zltail, zllen) = try!(read_ziplist_metadata(&mut reader));
 
         assert!(zllen%2 == 0);
@@ -416,13 +422,9 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
             self.formatter.hash_element(key, field.as_slice(), value.as_slice());
         }
 
-        let last_byte = try!(reader.read_byte());
+        let last_byte = try!(reader.read_u8());
         if last_byte != 0xFF {
-            return Err(IoError {
-                kind: IoErrorKind::OtherIoError,
-                desc: "Invalid end byte of ziplist",
-                detail: None
-            })
+            return Err(other_error("Invalid end byte of ziplist"))
         }
 
         self.formatter.end_hash(key);
@@ -434,7 +436,7 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
         let ziplist = try!(read_blob(&mut self.input));
         let raw_length = ziplist.len() as u64;
 
-        let mut reader = MemReader::new(ziplist);
+        let mut reader = Cursor::new(ziplist);
         let (_zlbytes, _zltail, zllen) = try!(read_ziplist_metadata(&mut reader));
 
         self.formatter.start_sorted_set(key, zllen as u32,
@@ -453,13 +455,9 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
             self.formatter.sorted_set_element(key, score, entry.as_slice());
         }
 
-        let last_byte = try!(reader.read_byte());
+        let last_byte = try!(reader.read_u8());
         if last_byte != 0xFF {
-            return Err(IoError {
-                kind: IoErrorKind::OtherIoError,
-                desc: "Invalid end byte of ziplist",
-                detail: None
-            })
+            return Err(other_error("Invalid end byte of ziplist"))
         }
 
         self.formatter.end_sorted_set(key);
@@ -470,7 +468,7 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
     fn read_quicklist_ziplist(&mut self, key: &[u8]) -> RdbOk {
         let ziplist = try!(read_blob(&mut self.input));
 
-        let mut reader = MemReader::new(ziplist);
+        let mut reader = Cursor::new(ziplist);
         let (_zlbytes, _zltail, zllen) = try!(read_ziplist_metadata(&mut reader));
 
         for _ in (0..zllen) {
@@ -478,38 +476,34 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
             self.formatter.list_element(key, entry.as_slice());
         }
 
-        let last_byte = try!(reader.read_byte());
+        let last_byte = try!(reader.read_u8());
         if last_byte != 0xFF {
-            return Err(IoError {
-                kind: IoErrorKind::OtherIoError,
-                desc: "Invalid end byte of ziplist (quicklist)",
-                detail: None
-            })
+            return Err(other_error("Invalid end byte of ziplist (quicklist)"))
         }
 
         Ok(())
     }
 
-    fn read_zipmap_entry<T: Reader>(&mut self, next_byte: u8, zipmap: &mut T) -> RdbResult<Vec<u8>> {
+    fn read_zipmap_entry<T: Read>(&mut self, next_byte: u8, zipmap: &mut T) -> RdbResult<Vec<u8>> {
         let mut elem_len;
         match next_byte {
-            253 => { elem_len = zipmap.read_le_u32().unwrap() },
+            253 => { elem_len = zipmap.read_u32::<LittleEndian>().unwrap()  },
             254 | 255 => {
                 panic!("Invalid length value in zipmap: {}", next_byte)
             },
             _ => { elem_len = next_byte as u32 }
         }
 
-        zipmap.read_exact(elem_len as usize)
+        read_exact(zipmap, elem_len as usize)
     }
 
     fn read_hash_zipmap(&mut self, key: &[u8]) -> RdbOk {
         let zipmap = try!(read_blob(&mut self.input));
         let raw_length = zipmap.len() as u64;
 
-        let mut reader = MemReader::new(zipmap);
+        let mut reader = Cursor::new(zipmap);
 
-        let zmlen = try!(reader.read_byte());
+        let zmlen = try!(reader.read_u8());
 
         let mut length;
         let mut size;
@@ -525,7 +519,7 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
                                   EncodingType::Zipmap(raw_length));
 
         loop {
-            let next_byte = try!(reader.read_byte());
+            let next_byte = try!(reader.read_u8());
 
             if next_byte == 0xFF {
                 break; // End of list.
@@ -533,8 +527,8 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
 
             let field = try!(self.read_zipmap_entry(next_byte, &mut reader));
 
-            let next_byte = try!(reader.read_byte());
-            let _free = try!(reader.read_byte());
+            let next_byte = try!(reader.read_u8());
+            let _free = try!(reader.read_u8());
             let value = try!(self.read_zipmap_entry(next_byte, &mut reader));
 
             self.formatter.hash_element(key, field.as_slice(), value.as_slice());
@@ -544,14 +538,10 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
             }
 
             if length == 0 {
-                let last_byte = try!(reader.read_byte());
+                let last_byte = try!(reader.read_u8());
 
                 if last_byte != 0xFF {
-                    return Err(IoError {
-                        kind: IoErrorKind::OtherIoError,
-                        desc: "Invalid end byte of zipmap",
-                        detail: None
-                    })
+                    return Err(other_error("Invalid end byte of zipmap"))
                 }
                 break;
             }
@@ -566,18 +556,18 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
         let intset = try!(read_blob(&mut self.input));
         let raw_length = intset.len() as u64;
 
-        let mut reader = MemReader::new(intset);
-        let byte_size = try!(reader.read_le_u32());
-        let intset_length = try!(reader.read_le_u32());
+        let mut reader = Cursor::new(intset);
+        let byte_size = try!(reader.read_u32::<LittleEndian>());
+        let intset_length = try!(reader.read_u32::<LittleEndian>());
 
         self.formatter.start_set(key, intset_length, self.last_expiretime,
                                  EncodingType::Intset(raw_length));
 
         for _ in (0..intset_length) {
             let val = match byte_size {
-                2 => try!(reader.read_le_i16()) as i64,
-                4 => try!(reader.read_le_i32()) as i64,
-                8 => try!(reader.read_le_i64()),
+                2 => try!(reader.read_i16::<LittleEndian>()) as i64,
+                4 => try!(reader.read_i32::<LittleEndian>()) as i64,
+                8 => try!(reader.read_i64::<LittleEndian>()),
                 _ => panic!("unhandled byte size in intset: {}", byte_size)
             };
 
@@ -644,8 +634,10 @@ impl<R: Reader, F: Formatter, L: Filter> RdbParser<R, F, L> {
     }
 
     fn skip(&mut self, skip_bytes: usize) -> RdbResult<()> {
-        match self.input.read_exact(skip_bytes) {
-            Ok(_) => Ok(()),
+        let mut buf = Vec::with_capacity(skip_bytes);
+        match self.input.read(&mut buf) {
+            Ok(n) if n == skip_bytes => Ok(()),
+            Ok(n) => Ok(()),
             Err(e) => Err(e)
         }
     }
