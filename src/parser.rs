@@ -44,14 +44,19 @@ fn other_error(desc: &'static str) -> IoError {
 }
 
 fn read_exact<T: Read>(reader: &mut T, len: usize) -> RdbResult<Vec<u8>> {
-    let mut buf = Vec::with_capacity(len);
-    match reader.take(len as u64).read_to_end(&mut buf) {
-        Ok(n) if n == len => Ok(buf),
-        Ok(_) => {
-            Err(other_error("Could not read enough bytes from Reader"))
-        },
-        Err(e) => Err(e)
+    let mut buf = [0; 1];
+    let mut out = Vec::with_capacity(len);
+
+    while out.len() < len {
+        match reader.read(&mut buf) {
+            Ok(1) => out.push(buf[0]),
+            Ok(_) => return Err(other_error("Could not read enough bytes from Reader")),
+            Err(e) => return Err(e)
+
+        };
     }
+
+    Ok(out)
 }
 
 pub fn read_length_with_encoding<R: Read>(input: &mut R) -> RdbResult<(u32, bool)> {
