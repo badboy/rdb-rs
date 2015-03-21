@@ -1,14 +1,12 @@
-#![feature(box_syntax)]
 #![feature(core)]
-#![feature(old_io)]
-#![feature(old_path)]
-#![feature(env)]
 
 extern crate rdb;
 extern crate getopts;
 extern crate regex;
 use std::env;
-use std::old_io::{BufferedReader, File};
+use std::io::{BufReader,Write};
+use std::fs::File;
+use std::path::Path;
 use getopts::Options;
 use regex::Regex;
 
@@ -84,8 +82,8 @@ pub fn main() {
     }
 
     let path = matches.free[0].clone();
-    let file = File::open(&Path::new(path));
-    let reader = BufferedReader::new(file);
+    let file = File::open(&Path::new(&*path)).unwrap();
+    let reader = BufReader::new(file);
 
     let mut res = Ok(());
 
@@ -117,13 +115,10 @@ pub fn main() {
         Ok(()) => {},
         Err(e) => {
             println!("");
-            let mut stderr = std::old_io::stderr();
+            let mut stderr = std::io::stderr();
 
-            stderr.write_str(format!("Parsing failed: {}\n", e.desc).as_slice()).unwrap();
-
-            if let Some(detail) = e.detail {
-                stderr.write_str(format!("Details: {}\n", detail).as_slice()).unwrap();
-            }
+            let out = format!("Parsing failed: {}\n", e);
+            stderr.write(out.as_bytes()).unwrap();
         }
     }
 }
