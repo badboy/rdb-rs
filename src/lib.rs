@@ -70,7 +70,6 @@
 //! value
 //! ```
 
-#![feature(slicing_syntax)]
 #![feature(io)]
 #![feature(core)]
 
