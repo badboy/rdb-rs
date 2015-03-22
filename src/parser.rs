@@ -76,16 +76,14 @@ pub fn read_length<R: Read>(input: &mut R) -> RdbResult<u32> {
 }
 
 pub fn verify_magic<R: Read>(input: &mut R) -> RdbOk {
-    let magic = try!(read_exact(input, 5));
+    let mut magic = [0; 5];
+    match input.read(&mut magic) {
+        Ok(5) => (),
+        Ok(_) => return Err(other_error("Could not read enough bytes for the magic")),
+        Err(e) => return Err(e)
+    };
 
-    // Meeeeeh.
-    let is_ok = magic[0] == constant::RDB_MAGIC.as_bytes()[0] &&
-        magic[1] == constant::RDB_MAGIC.as_bytes()[1] &&
-        magic[2] == constant::RDB_MAGIC.as_bytes()[2] &&
-        magic[3] == constant::RDB_MAGIC.as_bytes()[3] &&
-        magic[4] == constant::RDB_MAGIC.as_bytes()[4];
-
-    if is_ok {
+    if magic == constant::RDB_MAGIC.as_bytes() {
         Ok(())
     } else {
         Err(other_error("Invalid magic string"))
@@ -93,7 +91,12 @@ pub fn verify_magic<R: Read>(input: &mut R) -> RdbOk {
 }
 
 pub fn verify_version<R: Read>(input: &mut R) -> RdbOk {
-    let version = try!(read_exact(input, 4));
+    let mut version = [0; 4];
+    match input.read(&mut version) {
+        Ok(4) => (),
+        Ok(_) => return Err(other_error("Could not read enough bytes for the version")),
+        Err(e) => return Err(e)
+    };
 
     let version = (version[0]-48) as u32 * 1000 +
         (version[1]-48) as u32 * 100 +
@@ -302,7 +305,12 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
         // 1. 1 or 5 bytes length of previous entry
         let byte = try!(ziplist.read_u8());
         if byte == 254 {
-            try!(read_exact(ziplist, 4));
+            let mut bytes = [0; 4];
+            match ziplist.read(&mut bytes) {
+                Ok(4) => (),
+                Ok(_) => return Err(other_error("Could not read 4 bytes to skip after ziplist length")),
+                Err(e) => return Err(e)
+            };
         }
 
         let mut length : u64;
@@ -328,7 +336,13 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
                     0xF => {
                         match flag & 0xF {
                             0 => {
-                                let bytes = try!(read_exact(ziplist, 3));
+                                let mut bytes = [0; 3];
+                                match ziplist.read(&mut bytes) {
+                                    Ok(3) => (),
+                                    Ok(_) => return Err(other_error("Could not read enough bytes for 24bit number")),
+                                    Err(e) => return Err(e)
+                                };
+
                                 let number : i32 = (
                                     ((bytes[2] as i32) << 24) ^
                                     ((bytes[1] as i32) << 16) ^
