@@ -6,6 +6,7 @@ use byteorder::{LittleEndian,BigEndian,ReadBytesExt};
 use lzf;
 
 use helper;
+use helper::read_exact;
 use formatter::Formatter;
 use filter::Filter;
 
@@ -41,22 +42,6 @@ pub struct RdbParser<R: Read, F: Formatter, L: Filter> {
 #[inline]
 fn other_error(desc: &'static str) -> IoError {
     IoError::new(IoErrorKind::Other, desc, None)
-}
-
-fn read_exact<T: Read>(reader: &mut T, len: usize) -> RdbResult<Vec<u8>> {
-    let mut buf = [0; 1];
-    let mut out = Vec::with_capacity(len);
-
-    while out.len() < len {
-        match reader.read(&mut buf) {
-            Ok(1) => out.push(buf[0]),
-            Ok(_) => return Err(other_error("Could not read enough bytes from Reader")),
-            Err(e) => return Err(e)
-
-        };
-    }
-
-    Ok(out)
 }
 
 pub fn read_length_with_encoding<R: Read>(input: &mut R) -> RdbResult<(u32, bool)> {
