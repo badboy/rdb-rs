@@ -22,9 +22,11 @@
 //!
 //! ```rust,no_run
 //! # #![allow(unstable)]
-//! # use std::old_io::{BufferedReader, File};
-//! let file = File::open(&Path::new("dump.rdb"));
-//! let reader = BufferedReader::new(file);
+//! # use std::io::BufReader;
+//! # use std::fs::File;
+//! # use std::path::Path;
+//! let file = File::open(&Path::new("dump.rdb")).unwrap();
+//! let reader = BufReader::new(file);
 //! rdb::parse(reader, rdb::formatter::JSON::new(), rdb::filter::Simple::new());
 //! ```
 //!
@@ -70,13 +72,15 @@
 //! value
 //! ```
 
-#![feature(slicing_syntax)]
 #![feature(io)]
 #![feature(core)]
 
 extern crate lzf;
 extern crate "rustc-serialize" as serialize;
 extern crate regex;
+extern crate byteorder;
+
+use std::io::Read;
 
 #[doc(hidden)]
 pub use types::{
@@ -103,7 +107,7 @@ pub mod parser;
 pub mod formatter;
 pub mod filter;
 
-pub fn parse<R: Reader, F: Formatter, T: Filter>(input: R, formatter: F, filter: T) -> RdbOk {
+pub fn parse<R: Read, F: Formatter, T: Filter>(input: R, formatter: F, filter: T) -> RdbOk {
     let mut parser = RdbParser::new(input, formatter, filter);
     parser.parse()
 }

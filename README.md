@@ -28,10 +28,12 @@ This methods takes care of reading the RDB from a stream,
 parsing the containted data and calling the provided formatter with already-parsed values.
 
 ```rust
-use std::old_io::{BufferedReader, File};
+use std::io::BufReader;
+use std::fs::File;
+use std::path::Path;
 
-let file = File::open(&Path::new("dump.rdb"));
-let reader = BufferedReader::new(file);
+let file = File::open(&Path::new("dump.rdb")).unwrap();
+let reader = BufReader::new(file);
 rdb::parse(reader, rdb::formatter::JSON::new(), rdb::filter::Simple::new());
 ```
 

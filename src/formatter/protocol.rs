@@ -1,32 +1,34 @@
 #![allow(unused_must_use)]
 
 use formatter::Formatter;
-use std::old_io;
+use std::io;
+use std::io::Write;
 use types::EncodingType;
+use super::write_str;
 
 pub struct Protocol {
-    out: Box<Writer+'static>,
+    out: Box<Write+'static>,
     last_expiry: Option<u64>
 }
 
 impl Protocol {
     pub fn new() -> Protocol {
-        let out = Box::new(old_io::stdout());
+        let out = Box::new(io::stdout());
         Protocol { out: out, last_expiry: None }
     }
 }
 
 impl Protocol {
     fn emit(&mut self, args: Vec<&[u8]>) {
-        self.out.write_str("*");
+        write_str(&mut self.out, "*");
         self.out.write_all(args.len().to_string().as_bytes());
-        self.out.write_str("\r\n");
+        write_str(&mut self.out, "\r\n");
         for arg in args.iter() {
-            self.out.write_str("$");
+            write_str(&mut self.out, "$");
             self.out.write_all(arg.len().to_string().as_bytes());
-            self.out.write_str("\r\n");
+            write_str(&mut self.out, "\r\n");
             self.out.write_all(arg.as_slice());
-            self.out.write_str("\r\n");
+            write_str(&mut self.out, "\r\n");
         }
     }
 

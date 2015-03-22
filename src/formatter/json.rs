@@ -1,13 +1,15 @@
 #![allow(unused_must_use)]
 
 use formatter::Formatter;
-use std::old_io;
+use std::io;
+use std::io::Write;
 use std::str;
 use serialize::json;
 use types::EncodingType;
+use super::write_str;
 
 pub struct JSON {
-    out: Box<Writer+'static>,
+    out: Box<Write+'static>,
     is_first_db: bool,
     has_databases: bool,
     is_first_key_in_db: bool,
@@ -17,7 +19,7 @@ pub struct JSON {
 
 impl JSON {
     pub fn new() -> JSON {
-        let out = Box::new(old_io::stdout());
+        let out = Box::new(io::stdout());
         JSON {
             out: out,
             is_first_db: true,
@@ -37,7 +39,7 @@ fn encode_to_ascii(value: &[u8]) -> String {
 impl JSON {
     fn start_key(&mut self, length: u32) {
         if !self.is_first_key_in_db {
-            self.out.write_str(",");
+            write_str(&mut self.out, ",");
         }
 
         self.is_first_key_in_db = false;
@@ -49,7 +51,7 @@ impl JSON {
 
     fn write_comma(&mut self) {
         if self.element_index > 0 {
-            self.out.write_str(",");
+            write_str(&mut self.out, ",");
         }
         self.element_index += 1;
     }
@@ -64,22 +66,22 @@ impl JSON {
 
 impl Formatter for JSON {
     fn start_rdb(&mut self) {
-        self.out.write_str("[");
+        write_str(&mut self.out, "[");
     }
 
     fn end_rdb(&mut self) {
         if self.has_databases {
-            self.out.write_str("}");
+            write_str(&mut self.out, "}");
         }
-        self.out.write_str("]\n");
+        write_str(&mut self.out, "]\n");
     }
 
     fn start_database(&mut self, _db_number: u32) {
         if !self.is_first_db {
-            self.out.write_str("},");
+            write_str(&mut self.out, "},");
         }
 
-        self.out.write_str("{");
+        write_str(&mut self.out, "{");
         self.is_first_db = false;
         self.has_databases = true;
         self.is_first_key_in_db = true;
@@ -88,7 +90,7 @@ impl Formatter for JSON {
     fn set(&mut self, key: &[u8], value: &[u8], _expiry: Option<u64>) {
         self.start_key(0);
         self.write_key(key);
-        self.out.write_str(":");
+        write_str(&mut self.out, ":");
         self.write_value(value);
     }
 
@@ -96,20 +98,20 @@ impl Formatter for JSON {
                   _expiry: Option<u64>, _info: EncodingType) {
         self.start_key(length);
         self.write_key(key);
-        self.out.write_str(":{");
+        write_str(&mut self.out, ":{");
         self.out.flush();
     }
 
     fn end_hash(&mut self, _key: &[u8]) {
         self.end_key();
-        self.out.write_str("}");
+        write_str(&mut self.out, "}");
         self.out.flush();
     }
 
     fn hash_element(&mut self, _key: &[u8], field: &[u8], value: &[u8]) {
         self.write_comma();
         self.write_key(field);
-        self.out.write_str(":");
+        write_str(&mut self.out, ":");
         self.write_value(value);
         self.out.flush();
     }
@@ -118,13 +120,13 @@ impl Formatter for JSON {
                  _expiry: Option<u64>, _info: EncodingType) {
         self.start_key(cardinality);
         self.write_key(key);
-        self.out.write_str(":[");
+        write_str(&mut self.out, ":[");
         self.out.flush();
     }
 
     fn end_set(&mut self, _key: &[u8]) {
         self.end_key();
-        self.out.write_str("]");
+        write_str(&mut self.out, "]");
     }
 
     fn set_element(&mut self, _key: &[u8], member: &[u8]) {
@@ -136,12 +138,12 @@ impl Formatter for JSON {
                   _expiry: Option<u64>, _info: EncodingType) {
         self.start_key(length);
         self.write_key(key);
-        self.out.write_str(":[");
+        write_str(&mut self.out, ":[");
     }
 
     fn end_list(&mut self, _key: &[u8]) {
         self.end_key();
-        self.out.write_str("]");
+        write_str(&mut self.out, "]");
     }
 
     fn list_element(&mut self, _key: &[u8], value: &[u8]) {
@@ -153,19 +155,19 @@ impl Formatter for JSON {
                         _expiry: Option<u64>, _info: EncodingType) {
         self.start_key(length);
         self.write_key(key);
-        self.out.write_str(":{");
+        write_str(&mut self.out, ":{");
     }
 
     fn end_sorted_set(&mut self, _key: &[u8]) {
         self.end_key();
-        self.out.write_str("}");
+        write_str(&mut self.out, "}");
     }
 
     fn sorted_set_element(&mut self, _key: &[u8],
                           score: f64, member: &[u8]) {
         self.write_comma();
         self.write_key(member);
-        self.out.write_str(":");
+        write_str(&mut self.out, ":");
         self.write_value(score.to_string().as_bytes());
     }
 }
