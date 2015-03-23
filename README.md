@@ -92,7 +92,7 @@ If you find bugs or want to help otherwise, please [open an issue][issues].
 
 ## License
 
-BSD. See [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).
 
 [redis-rdb-tools]: https://github.com/sripathikrishnan/redis-rdb-tools
 [RESP]: http://redis.io/topics/protocol

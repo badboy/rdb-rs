@@ -1,8 +1,18 @@
 [package]
 
 name = "rdb"
-version = "0.0.1"
-authors = ["Jan-Erik Rediger <badboy@archlinux.us>"]
+version = "0.1.0"
+authors = ["Jan-Erik Rediger <badboy@fnordig.de>"]
+
+keywords = ["redis", "database"]
+description = "Fast and efficient RDB parsing utility"
+
+readme = "README.md"
+license = "MIT"
+
+homepage = "http://rdb.fnordig.de/"
+documentation = "http://rdb.fnordig.de/doc/rdb/"
+repository = "https://github.com/badboy/rdb-rs"
 
 [[bin]]
 name = "rdb"
