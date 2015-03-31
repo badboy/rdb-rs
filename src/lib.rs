@@ -76,7 +76,7 @@
 #![feature(core)]
 
 extern crate lzf;
-extern crate "rustc-serialize" as serialize;
+extern crate rustc_serialize as serialize;
 extern crate regex;
 extern crate byteorder;
 
