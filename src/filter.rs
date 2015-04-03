@@ -48,7 +48,7 @@ impl Filter for Simple {
         }
 
         let typ = Type::from_encoding(enc_type);
-        self.types.iter().any(|&x| x == typ)
+        self.types.iter().any(|x| *x == typ)
     }
 
     fn matches_key(&self, key: &[u8]) -> bool {

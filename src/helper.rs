@@ -28,8 +28,7 @@ fn read<T: Read>(reader: &mut T, buf : &mut [u8], min_bytes : usize) -> IoResult
     let n = try!(try_read(reader, buf, min_bytes));
     if n < min_bytes {
         Err(::std::io::Error::new(::std::io::ErrorKind::Other,
-                                  "Could not read enough bytes from Reader",
-                                  None))
+                                  "Could not read enough bytes from Reader"))
     } else {
         Ok(n)
     }

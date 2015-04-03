@@ -72,9 +72,6 @@
 //! value
 //! ```
 
-#![feature(io)]
-#![feature(core)]
-
 extern crate lzf;
 extern crate rustc_serialize as serialize;
 extern crate regex;

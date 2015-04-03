@@ -1,5 +1,3 @@
-#![feature(core)]
-
 extern crate rdb;
 extern crate getopts;
 extern crate regex;
@@ -12,7 +10,7 @@ use regex::Regex;
 
 fn print_usage(program: &str, opts: Options) {
     let brief = format!("Usage: {} [options] dump.rdb", program);
-    print!("{}", opts.usage(brief.as_slice()));
+    print!("{}", opts.usage(&brief));
 
 }
 
@@ -32,13 +30,13 @@ pub fn main() {
         Ok(m) => { m  }
         Err(e) => {
             println!("{}\n", e);
-            print_usage(program.as_slice(), opts);
+            print_usage(&program, opts);
             return;
         }
     };
 
     if matches.opt_present("h") {
-         print_usage(program.as_slice(), opts);
+         print_usage(&program, opts);
          return;
     }
 
@@ -49,7 +47,7 @@ pub fn main() {
     }
 
     for t in matches.opt_strs("t").iter() {
-        let typ = match t.as_slice() {
+        let typ = match &t[..] {
             "string" => rdb::Type::String,
             "list" => rdb::Type::List,
             "set" => rdb::Type::Set,
@@ -57,7 +55,7 @@ pub fn main() {
             "hash" => rdb::Type::Hash,
             _ => {
                 println!("Unknown type: {}\n", t);
-                print_usage(program.as_slice(), opts);
+                print_usage(&program, opts);
                 return;
             }
         };
@@ -65,11 +63,11 @@ pub fn main() {
     }
 
     if let Some(k) = matches.opt_str("k") {
-        let re = match Regex::new(k.as_slice()) {
+        let re = match Regex::new(&k) {
             Ok(re) => re,
             Err(err) => {
                 println!("Incorrect regexp: {:?}\n", err);
-                print_usage(program.as_slice(), opts);
+                print_usage(&program, opts);
                 return;
             }
         };
@@ -77,7 +75,7 @@ pub fn main() {
     }
 
     if matches.free.is_empty() {
-        print_usage(program.as_slice(), opts);
+        print_usage(&program, opts);
         return;
     }
 
@@ -88,7 +86,7 @@ pub fn main() {
     let mut res = Ok(());
 
     if let Some(f) = matches.opt_str("f") {
-        match f.as_slice() {
+        match &f[..] {
             "json" => {
                 res = rdb::parse(reader, rdb::formatter::JSON::new(), filter);
             },
@@ -104,7 +102,7 @@ pub fn main() {
             },
             _ => {
                 println!("Unknown format: {}\n", f);
-                print_usage(program.as_slice(), opts);
+                print_usage(&program, opts);
             }
         }
     } else {

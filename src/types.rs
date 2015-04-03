@@ -14,7 +14,7 @@ pub type RdbResult<T> = Result<T, RdbError>;
 
 pub type RdbOk = RdbResult<()>;
 
-#[derive(Debug,Copy,PartialEq)]
+#[derive(Debug,PartialEq)]
 pub enum Type {
     String,
     List,
@@ -36,7 +36,6 @@ impl Type {
     }
 }
 
-#[derive(Copy)]
 pub enum EncodingType {
     String,
     LinkedList,

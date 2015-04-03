@@ -1,6 +1,5 @@
 use formatter::Formatter;
 
-#[derive(Copy)]
 pub struct Nil;
 
 impl Nil {

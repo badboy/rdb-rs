@@ -41,7 +41,7 @@ pub struct RdbParser<R: Read, F: Formatter, L: Filter> {
 
 #[inline]
 fn other_error(desc: &'static str) -> IoError {
-    IoError::new(IoErrorKind::Other, desc, None)
+    IoError::new(IoErrorKind::Other, desc)
 }
 
 pub fn read_length_with_encoding<R: Read>(input: &mut R) -> RdbResult<(u32, bool)> {
@@ -125,7 +125,7 @@ pub fn read_blob<R: Read>(input: &mut R) -> RdbResult<Vec<u8>> {
                 let compressed_length = try!(read_length(input));
                 let real_length = try!(read_length(input));
                 let data = try!(read_exact(input, compressed_length as usize));
-                lzf::decompress(data.as_slice(), real_length as usize).unwrap()
+                lzf::decompress(&data, real_length as usize).unwrap()
             },
             _ => { panic!("Unknown encoding: {}", length) }
         };
@@ -178,7 +178,7 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
                     let mut checksum = Vec::new();
                     let len = try!(self.input.read_to_end(&mut checksum));
                     if len > 0 {
-                        self.formatter.checksum(checksum.as_slice());
+                        self.formatter.checksum(&checksum);
                     }
                     break;
                 },
@@ -201,15 +201,15 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
                     let auxval = try!(read_blob(&mut self.input));
 
                     self.formatter.aux_field(
-                        auxkey.as_slice(),
-                        auxval.as_slice());
+                        &auxkey,
+                        &auxval);
                 },
                 _ => {
                     if self.filter.matches_db(last_database) {
                         let key = try!(read_blob(&mut self.input));
 
-                        if self.filter.matches_type(next_op) && self.filter.matches_key(key.as_slice()) {
-                            try!(self.read_type(key.as_slice(), next_op));
+                        if self.filter.matches_type(next_op) && self.filter.matches_key(&key) {
+                            try!(self.read_type(&key, next_op));
                         } else {
                             try!(self.skip_object(next_op));
                         }
@@ -240,7 +240,7 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
 
         while len > 0 {
             let blob = try!(read_blob(&mut self.input));
-            self.formatter.list_element(key, blob.as_slice());
+            self.formatter.list_element(key, &blob);
             len -= 1;
         }
 
@@ -267,12 +267,12 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
                 255 => { f64::NEG_INFINITY },
                 _ => {
                     let tmp = try!(read_exact(&mut self.input, score_length as usize));
-                    unsafe{str::from_utf8_unchecked(tmp.as_slice())}.
+                    unsafe{str::from_utf8_unchecked(&tmp)}.
                         parse::<f64>().unwrap()
                 }
             };
 
-            self.formatter.sorted_set_element(key, score, val.as_slice());
+            self.formatter.sorted_set_element(key, score, &val);
 
             set_items -= 1;
         }
@@ -291,7 +291,7 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
             let field = try!(read_blob(&mut self.input));
             let val = try!(read_blob(&mut self.input));
 
-            self.formatter.hash_element(key, field.as_slice(), val.as_slice());
+            self.formatter.hash_element(key, &field, &val);
 
             hash_items -= 1;
         }
@@ -395,7 +395,7 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
 
         for _ in (0..zllen) {
             let entry = try!(self.read_ziplist_entry_string(&mut reader));
-            self.formatter.list_element(key, entry.as_slice());
+            self.formatter.list_element(key, &entry);
         }
 
         let last_byte = try!(reader.read_u8());
@@ -425,7 +425,7 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
         for _ in (0..zllen) {
             let field = try!(self.read_ziplist_entry_string(&mut reader));
             let value = try!(self.read_ziplist_entry_string(&mut reader));
-            self.formatter.hash_element(key, field.as_slice(), value.as_slice());
+            self.formatter.hash_element(key, &field, &value);
         }
 
         let last_byte = try!(reader.read_u8());
@@ -455,10 +455,10 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
         for _ in (0..zllen) {
             let entry = try!(self.read_ziplist_entry_string(&mut reader));
             let score = try!(self.read_ziplist_entry_string(&mut reader));
-            let score = str::from_utf8(score.as_slice())
+            let score = str::from_utf8(&score)
                 .unwrap()
                 .parse::<f64>().unwrap();
-            self.formatter.sorted_set_element(key, score, entry.as_slice());
+            self.formatter.sorted_set_element(key, score, &entry);
         }
 
         let last_byte = try!(reader.read_u8());
@@ -479,7 +479,7 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
 
         for _ in (0..zllen) {
             let entry = try!(self.read_ziplist_entry_string(&mut reader));
-            self.formatter.list_element(key, entry.as_slice());
+            self.formatter.list_element(key, &entry);
         }
 
         let last_byte = try!(reader.read_u8());
@@ -511,10 +511,10 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
 
         let zmlen = try!(reader.read_u8());
 
-        let mut length;
+        let mut length : i32;
         let mut size;
         if zmlen <= 254 {
-            length = zmlen;
+            length = zmlen as i32;
             size = zmlen
         } else {
             length = -1;
@@ -537,7 +537,7 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
             let _free = try!(reader.read_u8());
             let value = try!(self.read_zipmap_entry(next_byte, &mut reader));
 
-            self.formatter.hash_element(key, field.as_slice(), value.as_slice());
+            self.formatter.hash_element(key, &field, &value);
 
             if length > 0 {
                 length -= 1;
@@ -601,7 +601,7 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
         match value_type {
             encoding_type::STRING => {
                 let val = try!(read_blob(&mut self.input));
-                self.formatter.set(key, val.as_slice(), self.last_expiretime);
+                self.formatter.set(key, &val, self.last_expiretime);
             },
             encoding_type::LIST => {
                 try!(self.read_linked_list(key, Type::List))
