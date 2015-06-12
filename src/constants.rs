@@ -1,15 +1,11 @@
-pub mod version {
-    pub const SUPPORTED_MINIMUM : u32 = 1;
-    pub const SUPPORTED_MAXIMUM : u32 = 7;
-}
-
 pub mod constant {
     pub const RDB_6BITLEN : u8 = 0;
     pub const RDB_14BITLEN : u8 = 1;
+    pub const RDB_32BITLEN : u8 = 2;
     pub const RDB_ENCVAL : u8 = 3;
-    pub const RDB_MAGIC : &'static str = "REDIS";
 }
 
+#[allow(dead_code)]
 pub mod op_code {
     pub const AUX : u8 = 250;
     pub const RESIZEDB : u8 = 251;
@@ -19,6 +15,7 @@ pub mod op_code {
     pub const EOF : u8 = 255;
 }
 
+#[allow(dead_code)]
 pub mod encoding_type {
     pub const STRING : u8 = 0;
     pub const LIST : u8 = 1;

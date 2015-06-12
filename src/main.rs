@@ -1,3 +1,4 @@
+/*
 extern crate rdb;
 extern crate getopts;
 extern crate regex;
@@ -119,4 +120,7 @@ pub fn main() {
             stderr.write(out.as_bytes()).unwrap();
         }
     }
+}
+*/
+pub fn main() {
 }

@@ -15,6 +15,9 @@ BINCOLOR="\033[37;1m"
 MAKECOLOR="\033[32;1m"
 ENDCOLOR="\033[0m"
 
+check:
+	@RUST_TEST_THREADS=1 cargo test
+
 build:
 	cargo build
 
