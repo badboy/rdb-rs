@@ -109,7 +109,6 @@ named!(pub read_lzf_string < &[u8], Vec<u8> >,
            real_length: parse_length ~
            data: apply!(read_exact, compressed_length as usize) ,
            ||{
-               println!("compressed_length: {}, real_length: {}", compressed_length, real_length);
                lzf::decompress(data, real_length as usize).unwrap()
            })
       );
