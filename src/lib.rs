@@ -41,23 +41,15 @@ pub struct RdbVersion(u32);
 
 named!(pub rdb_magic<&[u8],&[u8]>, tag!("REDIS"));
 
-named!(rdb_version1, tag!("0001"));
-named!(rdb_version2, tag!("0002"));
-named!(rdb_version3, tag!("0003"));
-named!(rdb_version4, tag!("0004"));
-named!(rdb_version5, tag!("0005"));
-named!(rdb_version6, tag!("0006"));
-named!(rdb_version7, tag!("0007"));
-
 named!(pub rdb_version < &[u8],RdbVersion >,
        alt!(
-           rdb_version1 => { |_| RdbVersion(1) } |
-           rdb_version2 => { |_| RdbVersion(2) } |
-           rdb_version3 => { |_| RdbVersion(3) } |
-           rdb_version4 => { |_| RdbVersion(4) } |
-           rdb_version5 => { |_| RdbVersion(5) } |
-           rdb_version6 => { |_| RdbVersion(6) } |
-           rdb_version7 => { |_| RdbVersion(7) }
+           tag!("0001") => { |_| RdbVersion(1) } |
+           tag!("0002") => { |_| RdbVersion(2) } |
+           tag!("0003") => { |_| RdbVersion(3) } |
+           tag!("0004") => { |_| RdbVersion(4) } |
+           tag!("0005") => { |_| RdbVersion(5) } |
+           tag!("0006") => { |_| RdbVersion(6) } |
+           tag!("0007") => { |_| RdbVersion(7) }
            )
       );
 
