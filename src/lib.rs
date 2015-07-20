@@ -77,6 +77,9 @@ extern crate rustc_serialize as serialize;
 extern crate regex;
 extern crate byteorder;
 
+#[macro_use]
+extern crate clap;
+
 use std::io::Read;
 
 #[doc(hidden)]
