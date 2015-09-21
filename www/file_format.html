@@ -239,7 +239,7 @@ FF                          ## End of RDB file indicator
 <li><code>2</code> indicates that a 32 bit integer follows</li>
 </ul>
 <h4 id="compressed-strings">Compressed Strings</h4>
-<p>First read the section <a href="#length-encoding">Length Encoding</a>, specifically the part when the first two bits are <code>11</code>. In this case, the remaining 6 bits are read. If the value of those 6 bits is 4, it indicates that a compressed string follows.</p>
+<p>First read the section <a href="#length-encoding">Length Encoding</a>, specifically the part when the first two bits are <code>11</code>. In this case, the remaining 6 bits are read. If the value of those 6 bits is 3, it indicates that a compressed string follows.</p>
 <p>The compressed string is read as follows:</p>
 <ul>
 <li>The compressed length <code>clen</code> is read from the stream using <a href="#length-encoding">Length Encoding</a></li>

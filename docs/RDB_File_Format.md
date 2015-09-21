@@ -202,7 +202,7 @@ If the value of those 6 bits is:
 #### Compressed Strings
 
 First read the section [Length Encoding](#length-encoding), specifically the part when the first two bits are `11`. In this case, the remaining 6 bits are read.
-If the value of those 6 bits is 4, it indicates that a compressed string follows.
+If the value of those 6 bits is 3, it indicates that a compressed string follows.
 
 The compressed string is read as follows:
 
