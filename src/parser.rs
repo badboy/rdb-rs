@@ -36,7 +36,8 @@ pub struct RdbParser<R: Read, F: Formatter, L: Filter> {
     input: R,
     formatter: F,
     filter: L,
-    last_expiretime: Option<u64>
+    last_expiretime: Option<u64>,
+    last_database: u32,
 }
 
 #[inline]
@@ -150,7 +151,8 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
             input: input,
             formatter: formatter,
             filter: filter,
-            last_expiretime: None
+            last_expiretime: None,
+            last_database: 0,
         }
     }
 
@@ -160,69 +162,78 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
 
         self.formatter.start_rdb();
 
-        let mut last_database : u32 = 0;
         loop {
-            let next_op = try!(self.input.read_u8());
-
-            match next_op {
-                op_code::SELECTDB => {
-                    last_database = unwrap_or_panic!(read_length(&mut self.input));
-                    if self.filter.matches_db(last_database) {
-                        self.formatter.start_database(last_database);
-                    }
-                },
-                op_code::EOF => {
-                    self.formatter.end_database(last_database);
-                    self.formatter.end_rdb();
-
-                    let mut checksum = Vec::new();
-                    let len = try!(self.input.read_to_end(&mut checksum));
-                    if len > 0 {
-                        self.formatter.checksum(&checksum);
-                    }
-                    break;
-                },
-                op_code::EXPIRETIME_MS => {
-                    let expiretime_ms = try!(self.input.read_u64::<LittleEndian>());
-                    self.last_expiretime = Some(expiretime_ms);
-                },
-                op_code::EXPIRETIME => {
-                    let expiretime = try!(self.input.read_u32::<BigEndian>());
-                    self.last_expiretime = Some(expiretime as u64 * 1000);
-                },
-                op_code::RESIZEDB => {
-                    let db_size = try!(read_length(&mut self.input));
-                    let expires_size = try!(read_length(&mut self.input));
-
-                    self.formatter.resizedb(db_size, expires_size);
-                },
-                op_code::AUX => {
-                    let auxkey = try!(read_blob(&mut self.input));
-                    let auxval = try!(read_blob(&mut self.input));
-
-                    self.formatter.aux_field(
-                        &auxkey,
-                        &auxval);
-                },
-                _ => {
-                    if self.filter.matches_db(last_database) {
-                        let key = try!(read_blob(&mut self.input));
-
-                        if self.filter.matches_type(next_op) && self.filter.matches_key(&key) {
-                            try!(self.read_type(&key, next_op));
-                        } else {
-                            try!(self.skip_object(next_op));
-                        }
-                    } else {
-                        try!(self.skip_key_and_object(next_op));
-                    }
-
-                    self.last_expiretime = None;
-                }
+            match self.advance() {
+                Ok(true)  => {},
+                Ok(false) => break,
+                Err(e)    => return Err(e)
             }
         }
 
         Ok(())
+    }
+
+    fn advance(&mut self) -> RdbResult<bool> {
+        let next_op = try!(self.input.read_u8());
+
+        match next_op {
+            op_code::SELECTDB => {
+                self.last_database = unwrap_or_panic!(read_length(&mut self.input));
+                if self.filter.matches_db(self.last_database) {
+                    self.formatter.start_database(self.last_database);
+                }
+            },
+            op_code::EOF => {
+                self.formatter.end_database(self.last_database);
+                self.formatter.end_rdb();
+
+                let mut checksum = Vec::new();
+                let len = try!(self.input.read_to_end(&mut checksum));
+                if len > 0 {
+                    self.formatter.checksum(&checksum);
+                }
+                return Ok(false);
+            },
+            op_code::EXPIRETIME_MS => {
+                let expiretime_ms = try!(self.input.read_u64::<LittleEndian>());
+                self.last_expiretime = Some(expiretime_ms);
+            },
+            op_code::EXPIRETIME => {
+                let expiretime = try!(self.input.read_u32::<BigEndian>());
+                self.last_expiretime = Some(expiretime as u64 * 1000);
+            },
+            op_code::RESIZEDB => {
+                let db_size = try!(read_length(&mut self.input));
+                let expires_size = try!(read_length(&mut self.input));
+
+                self.formatter.resizedb(db_size, expires_size);
+            },
+            op_code::AUX => {
+                let auxkey = try!(read_blob(&mut self.input));
+                let auxval = try!(read_blob(&mut self.input));
+
+                self.formatter.aux_field(
+                    &auxkey,
+                    &auxval);
+            },
+            _ => {
+                if self.filter.matches_db(self.last_database) {
+                    let key = try!(read_blob(&mut self.input));
+
+                    if self.filter.matches_type(next_op) && self.filter.matches_key(&key) {
+                        try!(self.read_type(&key, next_op));
+                    } else {
+                        try!(self.skip_object(next_op));
+                    }
+                } else {
+                    try!(self.skip_key_and_object(next_op));
+                }
+
+                self.last_expiretime = None;
+            }
+        };
+
+        Ok(true)
     }
 
     fn read_linked_list(&mut self, key: &[u8], typ: Type) -> RdbOk {
