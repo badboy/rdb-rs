@@ -752,7 +752,7 @@ impl<R: Read, F: Filter> RdbParser<R, F> {
                 .parse::<f64>().unwrap();
 
             self.state = RdbParserState::ListZiplist(reader, len-2);
-            return Ok(ListElement(entry));
+            return Ok(SortedSetElement(score, entry));
         }
 
         let last_byte = try!(reader.read_u8());
