@@ -11,7 +11,6 @@ pub enum RdbIteratorType {
     AuxiliaryKey(Vec<u8>, Vec<u8>),
 
     StartDatabase(u32),
-    EndDatabase(u32),
     Ended,
 
     Key(Vec<u8>, Option<u64>), // (name, expiry)
