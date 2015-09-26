@@ -91,6 +91,7 @@ pub use types::{
 };
 
 pub use parser::RdbParser;
+pub use iterator_type::RdbIteratorType;
 
 use formatter::Formatter;
 use filter::Filter;
@@ -98,13 +99,14 @@ use filter::Filter;
 mod macros;
 mod constants;
 mod helper;
+mod iterator_type;
 
 pub mod types;
 pub mod parser;
 pub mod formatter;
 pub mod filter;
 
-pub fn parse<R: Read, F: Formatter, T: Filter>(input: R, formatter: F, filter: T) -> RdbOk {
-    let mut parser = RdbParser::new(input, formatter, filter);
-    parser.parse()
+pub fn parse<R: Read, F: Formatter, T: Filter>(input: R, formatter: F, filter: T) -> RdbParser<R,F,T> {
+    let parser = RdbParser::new(input, formatter, filter);
+    parser
 }
