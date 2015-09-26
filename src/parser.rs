@@ -315,7 +315,7 @@ impl<R: Read, F: Filter> RdbParser<R, F> {
 
         match next_op {
             op_code::SELECTDB => {
-                self.last_database = unwrap_or_panic!(read_length(&mut self.input));
+                self.last_database = try!(read_length(&mut self.input));
                 self.state = RdbParserState::OpCode;
 
                 if self.filter.matches_db(self.last_database) {
