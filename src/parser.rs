@@ -33,6 +33,8 @@ enum RdbParserState {
     ListZiplist(Cursor<Vec<u8>>, u32),
     SortedSetZiplist(Cursor<Vec<u8>>, u32),
     HashZiplist(Cursor<Vec<u8>>, u32),
+
+    Quicklist(u32, Option<(Cursor<Vec<u8>>, u16)>),
 }
 
 pub type RdbIteratorResult = RdbResult<RdbIteratorType>;
@@ -295,6 +297,10 @@ impl<R: Read, F: Filter> RdbParser<R, F> {
                 return self.read_set_intset_element(reader, len, byte_size);
             }
 
+            RdbParserState::Quicklist(len, opt) => {
+                return self.read_quicklist_element(len, opt);
+            }
+
             _ => {
                 panic!("Unimplemented state encountered: {:?}", self.state);
             }
@@ -512,25 +518,6 @@ impl<R: Read, F: Filter> RdbParser<R, F> {
         Ok(())
     }
 
-    fn read_quicklist_ziplist(&mut self, key: &[u8]) -> RdbOk {
-        let ziplist = try!(read_blob(&mut self.input));
-
-        let mut reader = Cursor::new(ziplist);
-        let (_zlbytes, _zltail, zllen) = try!(read_ziplist_metadata(&mut reader));
-
-        for _ in (0..zllen) {
-            let entry = try!(self.read_ziplist_entry_string(&mut reader));
-            //self.formatter.list_element(key, &entry);
-        }
-
-        let last_byte = try!(reader.read_u8());
-        if last_byte != 0xFF {
-            return Err(other_error("Invalid end byte of ziplist (quicklist)"))
-        }
-
-        Ok(())
-    }
-
     fn read_zipmap_entry<T: Read>(&mut self, next_byte: u8, zipmap: &mut T) -> RdbResult<Vec<u8>> {
         let elem_len;
         match next_byte {
@@ -599,16 +586,55 @@ impl<R: Read, F: Filter> RdbParser<R, F> {
         Ok(())
     }
 
-    fn read_quicklist(&mut self, key: &[u8]) -> RdbOk {
+    fn read_quicklist_header(&mut self) -> RdbIteratorResult {
         let len = try!(read_length(&mut self.input));
 
-        //self.formatter.start_set(key, 0, self.last_expiretime, EncodingType::Quicklist);
-        for _ in (0..len) {
-            try!(self.read_quicklist_ziplist(key));
-        }
-        //self.formatter.end_set(key);
+        self.state = RdbParserState::Quicklist(len, None);
+        Ok(ListStart(0))
+    }
 
-        Ok(())
+    fn read_quicklist_element(&mut self,
+                              len: u32,
+                              opt: Option<(Cursor<Vec<u8>>,u16)>)
+        -> RdbIteratorResult {
+        if let Some((cursor, zlen)) = opt  {
+            return self.read_quicklist_ziplist_element(len, cursor, zlen);
+        }
+
+        if len > 0 {
+            return self.read_quicklist_ziplist(len);
+        }
+
+        self.state = RdbParserState::OpCode;
+        return Ok(ListEnd);
+    }
+
+    fn read_quicklist_ziplist_element(&mut self,
+                              len: u32,
+                              mut reader: Cursor<Vec<u8>>,
+                              zlen: u16) -> RdbIteratorResult {
+        let entry = try!(self.read_ziplist_entry_string(&mut reader));
+        if zlen > 1 {
+           self.state = RdbParserState::Quicklist(len, Some((reader, zlen-1)));
+        } else {
+            let last_byte = try!(reader.read_u8());
+            if last_byte != 0xFF {
+                return Err(other_error("Invalid end byte of ziplist (quicklist)"))
+            }
+
+            self.state = RdbParserState::Quicklist(len, None);
+        }
+        Ok(ListElement(entry))
+    }
+
+    fn read_quicklist_ziplist(&mut self,
+                              len: u32) -> RdbIteratorResult {
+        let ziplist = try!(read_blob(&mut self.input));
+
+        let mut reader = Cursor::new(ziplist);
+        let (_zlbytes, _zltail, zllen) = try!(read_ziplist_metadata(&mut reader));
+
+        self.read_quicklist_ziplist_element(len, reader, zllen)
     }
 
     fn read_type(&mut self, value_type: u8) -> RdbIteratorResult {
@@ -646,9 +672,7 @@ impl<R: Read, F: Filter> RdbParser<R, F> {
                 return self.read_ziplist_header(Type::Hash);
             },
             encoding_type::LIST_QUICKLIST => {
-                panic!("LIST_QUICKLIST not implemented");
-                //self.state = RdbParserState::ListQuicklist;
-                //return List(&self.key, 0);
+                return self.read_quicklist_header();
             },
             _ => { panic!("Value Type not implemented: {}", value_type) }
         };
