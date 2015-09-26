@@ -20,8 +20,8 @@ path = "src/main.rs"
 doc  = false
 
 [dependencies]
-lzf = "*"
-getopts = "*"
-rustc-serialize = "*"
-regex = "*"
-byteorder = "*"
+lzf = "0.3.0"
+getopts = "0.2.14"
+rustc-serialize = "0.3.16"
+regex = "0.1.41"
+byteorder = "0.3.13"
