@@ -9,10 +9,10 @@ fn main() {
     let reader = BufReader::new(file);
     let filter = rdb::filter::Simple::new();
 
-    let mut parser = rdb::parse(reader, filter);
+    let parser = rdb::parse(reader, filter);
 
-    loop {
-        match parser.next() {
+    for val in parser {
+        match val {
             Ok(rdb::RdbIteratorType::EOF) => break,
             Ok(val) => println!("{:?}", val),
             Err(err) => {

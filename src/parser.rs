@@ -2,6 +2,7 @@ use std::{str,f64};
 use std::io::Error as IoError;
 use std::io::ErrorKind as IoErrorKind;
 use std::io::{Read,Cursor};
+use std::iter;
 use std::mem;
 use byteorder::{LittleEndian,BigEndian,ReadBytesExt};
 use lzf;
@@ -61,6 +62,18 @@ pub struct RdbParser<R: Read, L: Filter> {
     state: RdbParserState,
 }
 
+// Yo, I heart you like options, so I put some Result in your Option
+// and some Enums in your Result and some data into your Enums.
+impl<R: Read, F: Filter> iter::Iterator for RdbParser<R,F> {
+    type Item = RdbIteratorResult;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.advance() {
+            Ok(EOF) => None,
+            val @ _ => Some(val)
+        }
+    }
+}
 #[inline]
 fn other_error(desc: &'static str) -> IoError {
     IoError::new(IoErrorKind::Other, desc)
@@ -177,7 +190,7 @@ impl<R: Read, F: Filter> RdbParser<R, F> {
         }
     }
 
-    pub fn next(&mut self) -> RdbIteratorResult {
+    fn advance(&mut self) -> RdbIteratorResult {
         loop {
             match self._next() {
                 Ok(Skipped) => continue,
