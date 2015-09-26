@@ -29,6 +29,7 @@ enum RdbParserState {
     Hash(u32),
     Zipmap(Cursor<Vec<u8>>, i32),
     ListZiplist(Cursor<Vec<u8>>, u32),
+    SetIntset(Cursor<Vec<u8>>, u32, u32),
 }
 
 pub type RdbIteratorResult = RdbResult<RdbIteratorType>;
@@ -273,6 +274,14 @@ impl<R: Read, F: Filter> RdbParser<R, F> {
 
             RdbParserState::ListZiplist(reader, len) => {
                 return self.read_list_ziplist_element(reader, len);
+            }
+
+            RdbParserState::SetIntset(_, 0, _) => {
+                self.state = RdbParserState::OpCode;
+                return Ok(SetEnd);
+            }
+            RdbParserState::SetIntset(reader, len, byte_size) => {
+                return self.read_set_intset_element(reader, len, byte_size);
             }
 
             _ => {
@@ -579,33 +588,6 @@ impl<R: Read, F: Filter> RdbParser<R, F> {
         Ok(())
     }
 
-    fn read_set_intset(&mut self, key: &[u8]) -> RdbOk {
-        let intset = try!(read_blob(&mut self.input));
-        let raw_length = intset.len() as u64;
-
-        let mut reader = Cursor::new(intset);
-        let byte_size = try!(reader.read_u32::<LittleEndian>());
-        let intset_length = try!(reader.read_u32::<LittleEndian>());
-
-        //self.formatter.start_set(key, intset_length, self.last_expiretime,
-                                 //EncodingType::Intset(raw_length));
-
-        for _ in (0..intset_length) {
-            let val = match byte_size {
-                2 => try!(reader.read_i16::<LittleEndian>()) as i64,
-                4 => try!(reader.read_i32::<LittleEndian>()) as i64,
-                8 => try!(reader.read_i64::<LittleEndian>()),
-                _ => panic!("unhandled byte size in intset: {}", byte_size)
-            };
-
-            //self.formatter.set_element(key, val.to_string().as_bytes());
-        }
-
-        //self.formatter.end_set(key);
-
-        Ok(())
-    }
-
     fn read_quicklist(&mut self, key: &[u8]) -> RdbOk {
         let len = try!(read_length(&mut self.input));
 
@@ -644,9 +626,7 @@ impl<R: Read, F: Filter> RdbParser<R, F> {
                 return self.read_list_ziplist_header();
             },
             encoding_type::SET_INTSET => {
-                panic!("SET_INTSET not implemented");
-                //self.state = RdbParserState::SetIntset;
-                //return SetStart(&self.key, 0);
+                return self.read_set_intset_header();
             },
             encoding_type::ZSET_ZIPLIST => {
                 panic!("ZSET_ZIPLIST not implemented");
@@ -805,7 +785,6 @@ impl<R: Read, F: Filter> RdbParser<R, F> {
 
     fn read_list_ziplist_header(&mut self) -> RdbIteratorResult {
         let ziplist = try!(read_blob(&mut self.input));
-        let raw_length = ziplist.len() as u64;
 
         let mut reader = Cursor::new(ziplist);
         let (_zlbytes, _zltail, zllen) = try!(read_ziplist_metadata(&mut reader));
@@ -830,6 +809,36 @@ impl<R: Read, F: Filter> RdbParser<R, F> {
 
         self.state = RdbParserState::OpCode;
         Ok(ListEnd)
+    }
+
+    fn read_set_intset_header(&mut self) -> RdbIteratorResult {
+        let intset = try!(read_blob(&mut self.input));
+
+        let mut reader = Cursor::new(intset);
+        let byte_size = try!(reader.read_u32::<LittleEndian>());
+        let intset_length = try!(reader.read_u32::<LittleEndian>());
+
+        self.state = RdbParserState::SetIntset(reader,
+                                               intset_length as u32,
+                                               byte_size);
+        Ok(SetStart(intset_length))
+    }
+
+    fn read_set_intset_element(&mut self,
+                               mut reader: Cursor<Vec<u8>>,
+                               len: u32,
+                               byte_size: u32) -> RdbIteratorResult {
+        debug_assert!(len > 0);
+
+        let val = match byte_size {
+            2 => try!(reader.read_i16::<LittleEndian>()) as i64,
+            4 => try!(reader.read_i32::<LittleEndian>()) as i64,
+            8 => try!(reader.read_i64::<LittleEndian>()),
+            _ => panic!("unhandled byte size in intset: {}", byte_size)
+        };
+
+        self.state = RdbParserState::SetIntset(reader, len-1, byte_size);
+        Ok(SetElement(val.to_string().into_bytes()))
     }
 
     fn skip(&mut self, skip_bytes: usize) -> RdbResult<()> {
