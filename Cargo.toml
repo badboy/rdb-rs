@@ -14,11 +14,6 @@ homepage = "http://rdb.fnordig.de/"
 documentation = "http://rdb.fnordig.de/doc/rdb/"
 repository = "https://github.com/badboy/rdb-rs"
 
-[[bin]]
-name = "rdb"
-path = "src/main.rs"
-doc  = false
-
 [dependencies]
 lzf = "0.3.0"
 getopts = "0.2.14"
