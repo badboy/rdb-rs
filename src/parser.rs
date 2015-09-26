@@ -8,7 +8,6 @@ use lzf;
 
 use helper;
 use helper::read_exact;
-use formatter::Formatter;
 use iterator_type::RdbIteratorType;
 use iterator_type::RdbIteratorType::*;
 

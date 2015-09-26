@@ -93,7 +93,6 @@ pub use types::{
 pub use parser::RdbParser;
 pub use iterator_type::RdbIteratorType;
 
-use formatter::Formatter;
 use filter::Filter;
 
 mod macros;
@@ -103,7 +102,6 @@ mod iterator_type;
 
 pub mod types;
 pub mod parser;
-pub mod formatter;
 pub mod filter;
 
 pub fn parse<R: Read, F: Filter>(input: R, filter: F) -> RdbParser<R,F> {
