@@ -504,7 +504,7 @@ impl<R: Read, F: Filter> RdbParser<R, F> {
                 return Err(other_error("Invalid end byte of ziplist (quicklist)"))
             }
 
-            self.state = RdbParserState::Quicklist(len, None);
+            self.state = RdbParserState::Quicklist(len-1, None);
         }
         Ok(ListElement(entry))
     }
