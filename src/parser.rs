@@ -455,69 +455,6 @@ impl<R: Read, F: Filter> RdbParser<R, F> {
         }
     }
 
-    fn read_hash_ziplist(&mut self, key: &[u8]) -> RdbOk {
-        let ziplist = try!(read_blob(&mut self.input));
-        let raw_length = ziplist.len() as u64;
-
-        let mut reader = Cursor::new(ziplist);
-        let (_zlbytes, _zltail, zllen) = try!(read_ziplist_metadata(&mut reader));
-
-        assert!(zllen%2 == 0);
-        let zllen = zllen / 2;
-
-        //self.formatter.start_hash(key, zllen as u32,
-                                  //self.last_expiretime,
-                                  //EncodingType::Ziplist(raw_length));
-
-        for _ in (0..zllen) {
-            let field = try!(self.read_ziplist_entry_string(&mut reader));
-            let value = try!(self.read_ziplist_entry_string(&mut reader));
-            //self.formatter.hash_element(key, &field, &value);
-        }
-
-        let last_byte = try!(reader.read_u8());
-        if last_byte != 0xFF {
-            return Err(other_error("Invalid end byte of ziplist"))
-        }
-
-        //self.formatter.end_hash(key);
-
-        Ok(())
-    }
-
-    fn read_sortedset_ziplist(&mut self, key: &[u8]) -> RdbOk {
-        let ziplist = try!(read_blob(&mut self.input));
-        let raw_length = ziplist.len() as u64;
-
-        let mut reader = Cursor::new(ziplist);
-        let (_zlbytes, _zltail, zllen) = try!(read_ziplist_metadata(&mut reader));
-
-        //self.formatter.start_sorted_set(key, zllen as u32,
-                                        //self.last_expiretime,
-                                        //EncodingType::Ziplist(raw_length));
-
-        assert!(zllen%2 == 0);
-        let zllen = zllen / 2;
-
-        for _ in (0..zllen) {
-            let entry = try!(self.read_ziplist_entry_string(&mut reader));
-            let score = try!(self.read_ziplist_entry_string(&mut reader));
-            let score = str::from_utf8(&score)
-                .unwrap()
-                .parse::<f64>().unwrap();
-            //self.formatter.sorted_set_element(key, score, &entry);
-        }
-
-        let last_byte = try!(reader.read_u8());
-        if last_byte != 0xFF {
-            return Err(other_error("Invalid end byte of ziplist"))
-        }
-
-        //self.formatter.end_sorted_set(key);
-
-        Ok(())
-    }
-
     fn read_zipmap_entry<T: Read>(&mut self, next_byte: u8, zipmap: &mut T) -> RdbResult<Vec<u8>> {
         let elem_len;
         match next_byte {
@@ -529,61 +466,6 @@ impl<R: Read, F: Filter> RdbParser<R, F> {
         }
 
         read_exact(zipmap, elem_len as usize)
-    }
-
-    fn read_hash_zipmap(&mut self, key: &[u8]) -> RdbOk {
-        let zipmap = try!(read_blob(&mut self.input));
-        let raw_length = zipmap.len() as u64;
-
-        let mut reader = Cursor::new(zipmap);
-
-        let zmlen = try!(reader.read_u8());
-
-        let mut length : i32;
-        let size;
-        if zmlen <= 254 {
-            length = zmlen as i32;
-            size = zmlen
-        } else {
-            length = -1;
-            size = 0;
-        }
-
-        //self.formatter.start_hash(key, size as u32, self.last_expiretime,
-                                  //EncodingType::Zipmap(raw_length));
-
-        loop {
-            let next_byte = try!(reader.read_u8());
-
-            if next_byte == 0xFF {
-                break; // End of list.
-            }
-
-            let field = try!(self.read_zipmap_entry(next_byte, &mut reader));
-
-            let next_byte = try!(reader.read_u8());
-            let _free = try!(reader.read_u8());
-            let value = try!(self.read_zipmap_entry(next_byte, &mut reader));
-
-            //self.formatter.hash_element(key, &field, &value);
-
-            if length > 0 {
-                length -= 1;
-            }
-
-            if length == 0 {
-                let last_byte = try!(reader.read_u8());
-
-                if last_byte != 0xFF {
-                    return Err(other_error("Invalid end byte of zipmap"))
-                }
-                break;
-            }
-        }
-
-        //self.formatter.end_hash(key);
-
-        Ok(())
     }
 
     fn read_quicklist_header(&mut self) -> RdbIteratorResult {
