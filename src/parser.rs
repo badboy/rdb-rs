@@ -8,6 +8,9 @@ use lzf;
 use helper;
 use helper::read_exact;
 use formatter::Formatter;
+use iterator_type::RdbIteratorType;
+use iterator_type::RdbIteratorType::*;
+
 use filter::Filter;
 
 #[doc(hidden)]
@@ -173,14 +176,15 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
         Ok(())
     }
 
-    fn advance(&mut self) -> RdbResult<bool> {
+    pub fn advance(&mut self) -> RdbResult<RdbIteratorType> {
         let next_op = try!(self.input.read_u8());
 
         match next_op {
             op_code::SELECTDB => {
                 self.last_database = unwrap_or_panic!(read_length(&mut self.input));
                 if self.filter.matches_db(self.last_database) {
-                    self.formatter.start_database(self.last_database);
+                    return Ok(StartDatabase(self.last_database));
+                    //self.formatter.start_database(self.last_database);
                 }
             },
             op_code::EOF => {
@@ -192,7 +196,7 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
                 if len > 0 {
                     self.formatter.checksum(&checksum);
                 }
-                return Ok(false);
+                return Ok(RdbIteratorType::EOF);
             },
             op_code::EXPIRETIME_MS => {
                 let expiretime_ms = try!(self.input.read_u64::<LittleEndian>());
@@ -233,7 +237,7 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
             }
         };
 
-        Ok(true)
+        Ok(RdbIteratorType::Skipped)
     }
 
     fn read_linked_list(&mut self, key: &[u8], typ: Type) -> RdbOk {
