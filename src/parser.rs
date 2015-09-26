@@ -2,6 +2,7 @@ use std::{str,f64};
 use std::io::Error as IoError;
 use std::io::ErrorKind as IoErrorKind;
 use std::io::{Read,Cursor};
+use std::mem;
 use byteorder::{LittleEndian,BigEndian,ReadBytesExt};
 use lzf;
 
@@ -12,6 +13,24 @@ use iterator_type::RdbIteratorType;
 use iterator_type::RdbIteratorType::*;
 
 use filter::Filter;
+
+#[derive(Debug,Clone)]
+enum RdbParserState {
+    Empty,
+    Start,
+    Version,
+    OpCode,
+    RdbEnd,
+    Finished,
+    Value(u8),
+    List(u32),
+    Set(u32),
+    SortedSet(u32),
+    Hash(u32),
+    Zipmap(Cursor<Vec<u8>>, i32),
+}
+
+pub type RdbIteratorResult = RdbResult<RdbIteratorType>;
 
 #[doc(hidden)]
 use constants::{
@@ -35,12 +54,12 @@ pub use types::{
     EncodingType
 };
 
-pub struct RdbParser<R: Read, F: Formatter, L: Filter> {
+pub struct RdbParser<R: Read, L: Filter> {
     input: R,
-    formatter: F,
     filter: L,
     last_expiretime: Option<u64>,
     last_database: u32,
+    state: RdbParserState,
 }
 
 #[inline]
@@ -148,172 +167,168 @@ fn read_ziplist_metadata<T: Read>(input: &mut T) -> RdbResult<(u32, u32, u16)> {
     Ok((zlbytes, zltail, zllen))
 }
 
-impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
-    pub fn new(input: R, formatter: F, filter: L) -> RdbParser<R, F, L> {
+impl<R: Read, F: Filter> RdbParser<R, F> {
+    pub fn new(input: R, filter: F) -> RdbParser<R, F> {
         RdbParser{
             input: input,
-            formatter: formatter,
             filter: filter,
             last_expiretime: None,
             last_database: 0,
+            state: RdbParserState::Start,
         }
     }
 
-    pub fn parse(&mut self) -> RdbOk {
-        try!(verify_magic(&mut self.input));
-        try!(verify_version(&mut self.input));
-
-        self.formatter.start_rdb();
-
+    pub fn next(&mut self) -> RdbIteratorResult {
         loop {
-            match self.advance() {
-                Ok(true)  => {},
-                Ok(false) => break,
-                Err(e)    => return Err(e)
+            match self._next() {
+                Ok(Skipped) => continue,
+                // read_opcode already set the new state
+                result @ _  => return result,
             }
         }
-
-        Ok(())
     }
 
-    pub fn advance(&mut self) -> RdbResult<RdbIteratorType> {
+    fn _next(&mut self) -> RdbIteratorResult {
+        let state = mem::replace(&mut self.state, RdbParserState::Empty);
+
+        match state {
+            RdbParserState::Start => {
+                try!(verify_magic(&mut self.input));
+                self.state = RdbParserState::Version;
+            },
+            RdbParserState::Version => {
+                try!(verify_version(&mut self.input));
+                self.state = RdbParserState::OpCode;
+            },
+            RdbParserState::OpCode => {
+                return self.read_opcode();
+            },
+            RdbParserState::RdbEnd => {
+                let mut checksum = Vec::new();
+                let len = try!(self.input.read_to_end(&mut checksum));
+
+                self.state = RdbParserState::Finished;
+
+                if len > 0 {
+                    return Ok(Checksum(checksum))
+                }
+            },
+            RdbParserState::Finished => {
+                self.state = RdbParserState::Finished;
+                return Ok(EOF);
+            },
+
+            RdbParserState::Value(op) => {
+                return self.read_type(op);
+            },
+
+            RdbParserState::List(0) => {
+                self.state = RdbParserState::OpCode;
+                return Ok(ListEnd);
+            }
+            RdbParserState::List(len) => {
+                return self.read_linked_list_element(Type::List, len);
+            }
+
+            RdbParserState::Set(0) => {
+                self.state = RdbParserState::OpCode;
+                return Ok(SetEnd);
+            }
+            RdbParserState::Set(len) => {
+                return self.read_linked_list_element(Type::Set, len);
+            }
+
+            RdbParserState::Hash(0) => {
+                self.state = RdbParserState::OpCode;
+                return Ok(HashEnd);
+            }
+            RdbParserState::Hash(len) => {
+                return self.read_hash_element(len);
+            }
+
+            RdbParserState::SortedSet(0) => {
+                self.state = RdbParserState::OpCode;
+                return Ok(SortedSetEnd);
+            }
+            RdbParserState::SortedSet(len) => {
+                return self.read_sorted_set_element(len);
+            }
+
+            RdbParserState::Zipmap(reader, len) => {
+                return self.read_hash_zipmap_element(reader, len);
+            }
+
+            _ => {
+                panic!("Unimplemented state encountered: {:?}", self.state);
+            }
+
+        };
+
+        Ok(Skipped)
+    }
+
+    fn read_opcode(&mut self) -> RdbIteratorResult {
         let next_op = try!(self.input.read_u8());
 
         match next_op {
             op_code::SELECTDB => {
                 self.last_database = unwrap_or_panic!(read_length(&mut self.input));
+                self.state = RdbParserState::OpCode;
+
                 if self.filter.matches_db(self.last_database) {
                     return Ok(StartDatabase(self.last_database));
-                    //self.formatter.start_database(self.last_database);
+                } else {
+                    return Ok(Skipped);
                 }
             },
             op_code::EOF => {
-                self.formatter.end_database(self.last_database);
-                self.formatter.end_rdb();
-
-                let mut checksum = Vec::new();
-                let len = try!(self.input.read_to_end(&mut checksum));
-                if len > 0 {
-                    self.formatter.checksum(&checksum);
-                }
-                return Ok(RdbIteratorType::EOF);
+                self.state = RdbParserState::RdbEnd;
+                return Ok(RdbEnd)
             },
             op_code::EXPIRETIME_MS => {
                 let expiretime_ms = try!(self.input.read_u64::<LittleEndian>());
                 self.last_expiretime = Some(expiretime_ms);
+
+                self.state = RdbParserState::OpCode;
+                return Ok(Skipped);
             },
             op_code::EXPIRETIME => {
                 let expiretime = try!(self.input.read_u32::<BigEndian>());
                 self.last_expiretime = Some(expiretime as u64 * 1000);
+
+                self.state = RdbParserState::OpCode;
+                return Ok(Skipped);
             },
             op_code::RESIZEDB => {
                 let db_size = try!(read_length(&mut self.input));
                 let expires_size = try!(read_length(&mut self.input));
 
-                self.formatter.resizedb(db_size, expires_size);
+                self.state = RdbParserState::OpCode;
+                return Ok(ResizeDB(db_size, expires_size));
             },
             op_code::AUX => {
                 let auxkey = try!(read_blob(&mut self.input));
                 let auxval = try!(read_blob(&mut self.input));
 
-                self.formatter.aux_field(
-                    &auxkey,
-                    &auxval);
+                self.state = RdbParserState::OpCode;
+                return Ok(AuxiliaryKey(auxkey, auxval))
             },
             _ => {
-                if self.filter.matches_db(self.last_database) {
-                    let key = try!(read_blob(&mut self.input));
-
-                    if self.filter.matches_type(next_op) && self.filter.matches_key(&key) {
-                        try!(self.read_type(&key, next_op));
-                    } else {
-                        try!(self.skip_object(next_op));
-                    }
-                } else {
+                if !self.filter.matches_db(self.last_database) {
                     try!(self.skip_key_and_object(next_op));
+                    return Ok(Skipped);
                 }
 
-                self.last_expiretime = None;
+                let key = try!(read_blob(&mut self.input));
+                if self.filter.matches_type(next_op) && self.filter.matches_key(&key) {
+                    self.state = RdbParserState::Value(next_op);
+                    return Ok(Key(key, self.last_expiretime.take()));
+                } else {
+                    try!(self.skip_object(next_op));
+                    return Ok(Skipped);
+                }
             }
         };
-
-        Ok(RdbIteratorType::Skipped)
-    }
-
-    fn read_linked_list(&mut self, key: &[u8], typ: Type) -> RdbOk {
-        let mut len = try!(read_length(&mut self.input));
-
-        match typ {
-            Type::List => {
-                self.formatter.start_list(key, len, self.last_expiretime, EncodingType::LinkedList);
-            },
-            Type::Set => {
-                self.formatter.start_set(key, len, self.last_expiretime, EncodingType::LinkedList);
-            },
-            _ => { panic!("Unknown encoding type for linked list") }
-        }
-
-        while len > 0 {
-            let blob = try!(read_blob(&mut self.input));
-            self.formatter.list_element(key, &blob);
-            len -= 1;
-        }
-
-        match typ {
-            Type::List => self.formatter.end_list(key),
-            Type::Set => self.formatter.end_set(key),
-            _ => { panic!("Unknown encoding type for linked list") }
-        }
-
-        Ok(())
-    }
-
-    fn read_sorted_set(&mut self, key: &[u8]) -> RdbOk {
-        let mut set_items = unwrap_or_panic!(read_length(&mut self.input));
-
-        self.formatter.start_sorted_set(key, set_items, self.last_expiretime, EncodingType::Hashtable);
-
-        while set_items > 0 {
-            let val = try!(read_blob(&mut self.input));
-            let score_length = try!(self.input.read_u8());
-            let score = match score_length {
-                253 => { f64::NAN },
-                254 => { f64::INFINITY },
-                255 => { f64::NEG_INFINITY },
-                _ => {
-                    let tmp = try!(read_exact(&mut self.input, score_length as usize));
-                    unsafe{str::from_utf8_unchecked(&tmp)}.
-                        parse::<f64>().unwrap()
-                }
-            };
-
-            self.formatter.sorted_set_element(key, score, &val);
-
-            set_items -= 1;
-        }
-
-        self.formatter.end_sorted_set(key);
-
-        Ok(())
-    }
-
-    fn read_hash(&mut self, key: &[u8]) -> RdbOk {
-        let mut hash_items = try!(read_length(&mut self.input));
-
-        self.formatter.start_hash(key, hash_items, self.last_expiretime, EncodingType::Hashtable);
-
-        while hash_items > 0 {
-            let field = try!(read_blob(&mut self.input));
-            let val = try!(read_blob(&mut self.input));
-
-            self.formatter.hash_element(key, &field, &val);
-
-            hash_items -= 1;
-        }
-
-        self.formatter.end_hash(key);
-
-        Ok(())
     }
 
     fn read_ziplist_entry<T: Read>(&mut self, ziplist: &mut T) -> RdbResult<ZiplistEntry> {
@@ -404,13 +419,13 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
         let mut reader = Cursor::new(ziplist);
         let (_zlbytes, _zltail, zllen) = try!(read_ziplist_metadata(&mut reader));
 
-        self.formatter.start_list(key, zllen as u32,
-                                  self.last_expiretime,
-                                  EncodingType::Ziplist(raw_length));
+        //self.formatter.start_list(key, zllen as u32,
+                                  //self.last_expiretime,
+                                  //EncodingType::Ziplist(raw_length));
 
         for _ in (0..zllen) {
             let entry = try!(self.read_ziplist_entry_string(&mut reader));
-            self.formatter.list_element(key, &entry);
+            //self.formatter.list_element(key, &entry);
         }
 
         let last_byte = try!(reader.read_u8());
@@ -418,7 +433,7 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
             return Err(other_error("Invalid end byte of ziplist"))
         }
 
-        self.formatter.end_list(key);
+        //self.formatter.end_list(key);
 
         Ok(())
     }
@@ -433,14 +448,14 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
         assert!(zllen%2 == 0);
         let zllen = zllen / 2;
 
-        self.formatter.start_hash(key, zllen as u32,
-                                  self.last_expiretime,
-                                  EncodingType::Ziplist(raw_length));
+        //self.formatter.start_hash(key, zllen as u32,
+                                  //self.last_expiretime,
+                                  //EncodingType::Ziplist(raw_length));
 
         for _ in (0..zllen) {
             let field = try!(self.read_ziplist_entry_string(&mut reader));
             let value = try!(self.read_ziplist_entry_string(&mut reader));
-            self.formatter.hash_element(key, &field, &value);
+            //self.formatter.hash_element(key, &field, &value);
         }
 
         let last_byte = try!(reader.read_u8());
@@ -448,7 +463,7 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
             return Err(other_error("Invalid end byte of ziplist"))
         }
 
-        self.formatter.end_hash(key);
+        //self.formatter.end_hash(key);
 
         Ok(())
     }
@@ -460,9 +475,9 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
         let mut reader = Cursor::new(ziplist);
         let (_zlbytes, _zltail, zllen) = try!(read_ziplist_metadata(&mut reader));
 
-        self.formatter.start_sorted_set(key, zllen as u32,
-                                        self.last_expiretime,
-                                        EncodingType::Ziplist(raw_length));
+        //self.formatter.start_sorted_set(key, zllen as u32,
+                                        //self.last_expiretime,
+                                        //EncodingType::Ziplist(raw_length));
 
         assert!(zllen%2 == 0);
         let zllen = zllen / 2;
@@ -473,7 +488,7 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
             let score = str::from_utf8(&score)
                 .unwrap()
                 .parse::<f64>().unwrap();
-            self.formatter.sorted_set_element(key, score, &entry);
+            //self.formatter.sorted_set_element(key, score, &entry);
         }
 
         let last_byte = try!(reader.read_u8());
@@ -481,7 +496,7 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
             return Err(other_error("Invalid end byte of ziplist"))
         }
 
-        self.formatter.end_sorted_set(key);
+        //self.formatter.end_sorted_set(key);
 
         Ok(())
     }
@@ -494,7 +509,7 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
 
         for _ in (0..zllen) {
             let entry = try!(self.read_ziplist_entry_string(&mut reader));
-            self.formatter.list_element(key, &entry);
+            //self.formatter.list_element(key, &entry);
         }
 
         let last_byte = try!(reader.read_u8());
@@ -536,8 +551,8 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
             size = 0;
         }
 
-        self.formatter.start_hash(key, size as u32, self.last_expiretime,
-                                  EncodingType::Zipmap(raw_length));
+        //self.formatter.start_hash(key, size as u32, self.last_expiretime,
+                                  //EncodingType::Zipmap(raw_length));
 
         loop {
             let next_byte = try!(reader.read_u8());
@@ -552,7 +567,7 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
             let _free = try!(reader.read_u8());
             let value = try!(self.read_zipmap_entry(next_byte, &mut reader));
 
-            self.formatter.hash_element(key, &field, &value);
+            //self.formatter.hash_element(key, &field, &value);
 
             if length > 0 {
                 length -= 1;
@@ -568,7 +583,7 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
             }
         }
 
-        self.formatter.end_hash(key);
+        //self.formatter.end_hash(key);
 
         Ok(())
     }
@@ -581,8 +596,8 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
         let byte_size = try!(reader.read_u32::<LittleEndian>());
         let intset_length = try!(reader.read_u32::<LittleEndian>());
 
-        self.formatter.start_set(key, intset_length, self.last_expiretime,
-                                 EncodingType::Intset(raw_length));
+        //self.formatter.start_set(key, intset_length, self.last_expiretime,
+                                 //EncodingType::Intset(raw_length));
 
         for _ in (0..intset_length) {
             let val = match byte_size {
@@ -592,10 +607,10 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
                 _ => panic!("unhandled byte size in intset: {}", byte_size)
             };
 
-            self.formatter.set_element(key, val.to_string().as_bytes());
+            //self.formatter.set_element(key, val.to_string().as_bytes());
         }
 
-        self.formatter.end_set(key);
+        //self.formatter.end_set(key);
 
         Ok(())
     }
@@ -603,55 +618,200 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
     fn read_quicklist(&mut self, key: &[u8]) -> RdbOk {
         let len = try!(read_length(&mut self.input));
 
-        self.formatter.start_set(key, 0, self.last_expiretime, EncodingType::Quicklist);
+        //self.formatter.start_set(key, 0, self.last_expiretime, EncodingType::Quicklist);
         for _ in (0..len) {
             try!(self.read_quicklist_ziplist(key));
         }
-        self.formatter.end_set(key);
+        //self.formatter.end_set(key);
 
         Ok(())
     }
 
-    fn read_type(&mut self, key: &[u8], value_type: u8) -> RdbOk {
+    fn read_type(&mut self, value_type: u8) -> RdbIteratorResult {
         match value_type {
             encoding_type::STRING => {
                 let val = try!(read_blob(&mut self.input));
-                self.formatter.set(key, &val, self.last_expiretime);
+                self.state = RdbParserState::OpCode;
+                return Ok(Blob(val));
             },
             encoding_type::LIST => {
-                try!(self.read_linked_list(key, Type::List))
+                return self.read_linked_list_header(Type::List);
             },
             encoding_type::SET => {
-                try!(self.read_linked_list(key, Type::Set))
+                return self.read_linked_list_header(Type::Set);
             },
             encoding_type::ZSET => {
-                try!(self.read_sorted_set(key))
+                return self.read_sorted_set_header();
             },
             encoding_type::HASH => {
-                try!(self.read_hash(key))
+                return self.read_hash_header();
             },
             encoding_type::HASH_ZIPMAP => {
-                try!(self.read_hash_zipmap(key))
+                return self.read_hash_zipmap_header();
             },
             encoding_type::LIST_ZIPLIST => {
-                try!(self.read_list_ziplist(key))
+                panic!("LIST_ZIPLIST not implemented");
+                //self.state = RdbParserState::ListZiplist;
+                //return ListStart(&self.key, 0);
             },
             encoding_type::SET_INTSET => {
-                try!(self.read_set_intset(key))
+                panic!("SET_INTSET not implemented");
+                //self.state = RdbParserState::SetIntset;
+                //return SetStart(&self.key, 0);
             },
             encoding_type::ZSET_ZIPLIST => {
-                try!(self.read_sortedset_ziplist(key))
+                panic!("ZSET_ZIPLIST not implemented");
+                //self.state = RdbParserState::SortedSetZiplist;
+                //return SortedSetStart(&self.key, 0);
             },
             encoding_type::HASH_ZIPLIST => {
-                try!(self.read_hash_ziplist(key))
+                panic!("HASH_ZIPLIST not implemented");
+                //self.state = RdbParserState::HashZiplist;
+                //return HashStart(&self.key, 0);
             },
             encoding_type::LIST_QUICKLIST => {
-                try!(self.read_quicklist(key))
+                panic!("LIST_QUICKLIST not implemented");
+                //self.state = RdbParserState::ListQuicklist;
+                //return List(&self.key, 0);
             },
             _ => { panic!("Value Type not implemented: {}", value_type) }
         };
+    }
 
-        Ok(())
+    fn read_linked_list_header(&mut self, typ: Type) -> RdbIteratorResult {
+        let len = try!(read_length(&mut self.input));
+
+        match typ {
+            Type::List => {
+                self.state = RdbParserState::List(len);
+                return Ok(ListStart(len));
+            },
+            Type::Set => {
+                self.state = RdbParserState::Set(len);
+                return Ok(SetStart(len));
+            },
+            _ => { panic!("Unknown encoding type for linked list") }
+        }
+    }
+
+    fn read_linked_list_element(&mut self, typ: Type, len: u32) -> RdbIteratorResult {
+        debug_assert!(len > 0);
+
+        let blob = try!(read_blob(&mut self.input));
+
+        match typ {
+            Type::List => {
+                self.state = RdbParserState::List(len-1);
+                Ok(ListElement(blob))
+            },
+            Type::Set => {
+                self.state = RdbParserState::Set(len-1);
+                Ok(SetElement(blob))
+            },
+            _ => { panic!("Unknown encoding type for linked list") }
+        }
+    }
+
+    fn read_sorted_set_header(&mut self) -> RdbIteratorResult {
+        let set_items = unwrap_or_panic!(read_length(&mut self.input));
+
+        self.state = RdbParserState::SortedSet(set_items);
+        Ok(SortedSetStart(set_items))
+    }
+
+    fn read_sorted_set_element(&mut self, set_items: u32) -> RdbIteratorResult {
+        debug_assert!(set_items > 0);
+
+        let val = try!(read_blob(&mut self.input));
+        let score_length = try!(self.input.read_u8());
+        let score = match score_length {
+            253 => { f64::NAN },
+            254 => { f64::INFINITY },
+            255 => { f64::NEG_INFINITY },
+            _ => {
+                let tmp = try!(read_exact(&mut self.input, score_length as usize));
+                unsafe{str::from_utf8_unchecked(&tmp)}.
+                    parse::<f64>().unwrap()
+            }
+        };
+
+        self.state = RdbParserState::SortedSet(set_items-1);
+        Ok(SortedSetElement(score, val))
+    }
+
+    fn read_hash_header(&mut self) -> RdbIteratorResult {
+        let hash_items = try!(read_length(&mut self.input));
+
+        self.state = RdbParserState::Hash(hash_items);
+        Ok(HashStart(hash_items))
+    }
+
+    fn read_hash_element(&mut self, hash_items: u32) -> RdbIteratorResult {
+        debug_assert!(hash_items > 0);
+
+        let field = try!(read_blob(&mut self.input));
+        let val = try!(read_blob(&mut self.input));
+
+        self.state = RdbParserState::Hash(hash_items-1);
+        Ok(HashElement(field, val))
+    }
+
+    fn read_hash_zipmap_header(&mut self) -> RdbIteratorResult {
+        let zipmap = try!(read_blob(&mut self.input));
+        let _raw_length = zipmap.len() as u64;
+
+        let mut reader = Cursor::new(zipmap);
+
+        let zmlen = try!(reader.read_u8());
+
+        let length : i32;
+        let size;
+        if zmlen <= 254 {
+            length = zmlen as i32;
+            size = zmlen
+        } else {
+            length = -1;
+            size = 0;
+        }
+
+        self.state = RdbParserState::Zipmap(reader, length);
+        Ok(HashStart(size as u32))
+    }
+
+    fn read_hash_zipmap_element(&mut self, mut reader: Cursor<Vec<u8>>, mut length: i32) -> RdbIteratorResult {
+
+        if length == 0 {
+            let last_byte = try!(reader.read_u8());
+
+            if last_byte != 0xFF {
+                return Err(other_error("Invalid end byte of zipmap"))
+            }
+
+            self.state = RdbParserState::OpCode;
+            return Ok(HashEnd);
+        }
+
+        let next_byte = try!(reader.read_u8());
+
+        if next_byte == 0xFF {
+            self.state = RdbParserState::OpCode;
+            return Ok(HashEnd);
+        }
+
+        let field = try!(self.read_zipmap_entry(next_byte, &mut reader));
+
+        let next_byte = try!(reader.read_u8());
+        let _free = try!(reader.read_u8());
+        let value = try!(self.read_zipmap_entry(next_byte, &mut reader));
+
+        if length > 0 {
+            length -= 1;
+            self.state = RdbParserState::Zipmap(reader, length);
+        } else {
+            self.state = RdbParserState::Zipmap(reader, -1);
+        }
+
+        Ok(HashElement(field, value))
     }
 
     fn skip(&mut self, skip_bytes: usize) -> RdbResult<()> {

@@ -1,6 +1,4 @@
 extern crate rdb;
-extern crate getopts;
-extern crate regex;
 use std::io::BufReader;
 use std::fs::File;
 use std::path::Path;
@@ -11,12 +9,16 @@ fn main() {
     let reader = BufReader::new(file);
     let filter = rdb::filter::Simple::new();
 
-    let mut parser = rdb::parse(reader, rdb::formatter::Nil::new(), filter);
+    let mut parser = rdb::parse(reader, filter);
 
-
-    parser.parse().unwrap();
-
-    while let Ok(val) = parser.advance() {
-        println!("{:?}", val);
+    loop {
+        match parser.next() {
+            Ok(rdb::RdbIteratorType::EOF) => break,
+            Ok(val) => println!("{:?}", val),
+            Err(err) => {
+                println!("ERR! -> {:?}", err);
+                break;
+            }
+        }
     }
 }

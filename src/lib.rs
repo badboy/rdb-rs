@@ -106,7 +106,7 @@ pub mod parser;
 pub mod formatter;
 pub mod filter;
 
-pub fn parse<R: Read, F: Formatter, T: Filter>(input: R, formatter: F, filter: T) -> RdbParser<R,F,T> {
-    let parser = RdbParser::new(input, formatter, filter);
+pub fn parse<R: Read, F: Filter>(input: R, filter: F) -> RdbParser<R,F> {
+    let parser = RdbParser::new(input, filter);
     parser
 }
