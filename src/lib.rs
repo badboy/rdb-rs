@@ -83,6 +83,7 @@ extern crate byteorder;
 use std::io::Read;
 
 #[doc(hidden)]
+#[rustfmt_skip]
 pub use types::{
     ZiplistEntry,
     Type,
@@ -90,7 +91,7 @@ pub use types::{
     /* error and result types */
     RdbError,
     RdbResult,
-    RdbOk,
+    RdbOk
 };
 
 pub use parser::RdbParser;
@@ -108,7 +109,7 @@ pub mod parser;
 pub mod filter;
 pub mod formatter;
 
-pub fn parse<R: Read, F: Filter>(input: R, filter: F) -> RdbParser<R,F> {
+pub fn parse<R: Read, F: Filter>(input: R, filter: F) -> RdbParser<R, F> {
     let parser = RdbParser::new(input, filter);
     parser
 }
