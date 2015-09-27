@@ -21,7 +21,7 @@ doc  = false
 
 [dependencies]
 lzf = "*"
-getopts = "*"
+clap = "*"
 rustc-serialize = "*"
 regex = "*"
 byteorder = "*"

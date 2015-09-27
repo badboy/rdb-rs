@@ -14,13 +14,15 @@ pub type RdbResult<T> = Result<T, RdbError>;
 
 pub type RdbOk = RdbResult<()>;
 
-#[derive(Debug,PartialEq)]
-pub enum Type {
-    String,
-    List,
-    Set,
-    SortedSet,
-    Hash
+arg_enum!{
+    #[derive(Debug,PartialEq)]
+    pub enum Type {
+        String,
+        List,
+        Set,
+        SortedSet,
+        Hash
+    }
 }
 
 impl Type {
