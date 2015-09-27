@@ -711,7 +711,7 @@ impl<R: Read, F: Filter> RdbParser<R, F> {
                assert!(zllen%2 == 0);
 
                self.state = RdbParserState::SortedSetZiplist(reader, zllen);
-               Ok(SortedSetStart(zllen as u32))
+               Ok(SortedSetStart(zllen/2 as u32))
            }
            Type::Hash => {
                assert!(zllen%2 == 0);
@@ -750,7 +750,7 @@ impl<R: Read, F: Filter> RdbParser<R, F> {
                 .unwrap()
                 .parse::<f64>().unwrap();
 
-            self.state = RdbParserState::ListZiplist(reader, len-2);
+            self.state = RdbParserState::SortedSetZiplist(reader, len-2);
             return Ok(SortedSetElement(score, entry));
         }
 
@@ -760,7 +760,7 @@ impl<R: Read, F: Filter> RdbParser<R, F> {
         }
 
         self.state = RdbParserState::OpCode;
-        Ok(ListEnd)
+        Ok(SortedSetEnd)
     }
 
     fn read_hash_ziplist_element(&mut self, mut reader: Cursor<Vec<u8>>, len: u32) -> RdbIteratorResult {
@@ -779,7 +779,7 @@ impl<R: Read, F: Filter> RdbParser<R, F> {
         }
 
         self.state = RdbParserState::OpCode;
-        Ok(ListEnd)
+        Ok(HashEnd)
     }
 
     fn read_set_intset_header(&mut self) -> RdbIteratorResult {
