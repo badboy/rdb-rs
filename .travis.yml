@@ -1,2 +1,10 @@
 language: rust
+sudo: false
+
+# run builds for both all the trains
+rust:
+  - nightly
+  - beta
+  - stable
+
 script: make test
