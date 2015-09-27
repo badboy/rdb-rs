@@ -661,7 +661,6 @@ impl<R: Read, F: Filter> RdbParser<R, F> {
     }
 
     fn read_hash_zipmap_element(&mut self, mut reader: Cursor<Vec<u8>>, mut length: i32) -> RdbIteratorResult {
-
         if length == 0 {
             let last_byte = try!(reader.read_u8());
 
@@ -770,7 +769,7 @@ impl<R: Read, F: Filter> RdbParser<R, F> {
             let field = try!(self.read_ziplist_entry_string(&mut reader));
             let value = try!(self.read_ziplist_entry_string(&mut reader));
 
-            self.state = RdbParserState::ListZiplist(reader, len-2);
+            self.state = RdbParserState::HashZiplist(reader, len-2);
             return Ok(HashElement(field, value));
         }
 
