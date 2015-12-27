@@ -1,19 +1,26 @@
+//! General types
+
 use std::io::Error as IoError;
 
 use constants::encoding_type;
 
+/// A ziplist can either hold a binary blob or a number
 #[derive(Debug,Clone)]
 pub enum ZiplistEntry {
     String(Vec<u8>),
     Number(i64),
 }
 
+/// An Error on parsing the input
 pub type RdbError = IoError;
 
+/// A Result returning an parser error or the actual item
 pub type RdbResult<T> = Result<T, RdbError>;
 
+/// Shortcut for `RdbResult`
 pub type RdbOk = RdbResult<()>;
 
+/// Available types in a Redis dump
 #[derive(Debug,PartialEq)]
 pub enum Type {
     String,
@@ -37,15 +44,4 @@ impl Type {
             }
         }
     }
-}
-
-pub enum EncodingType {
-    String,
-    LinkedList,
-    Hashtable,
-    Skiplist,
-    Intset(u64),
-    Ziplist(u64),
-    Zipmap(u64),
-    Quicklist,
 }

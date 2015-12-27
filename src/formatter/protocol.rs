@@ -5,6 +5,7 @@ use std::io;
 use std::io::Write;
 use super::write_str;
 
+/// Format in the Redis protocol, useful to import
 pub struct Protocol {
     out: Box<Write + 'static>,
     last_expiry: Option<u64>,

@@ -5,6 +5,7 @@ use std::io::Write;
 use serialize::hex::ToHex;
 use super::write_str;
 
+/// Format in plaintext, good for diffing
 pub struct Plain {
     out: Box<Write + 'static>,
     dbnum: u32,

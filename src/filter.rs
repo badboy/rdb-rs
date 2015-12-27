@@ -1,13 +1,17 @@
+//! Filter trait and implementations to skip items in the parser
+
 use std::str;
 use regex::Regex;
 use types::Type;
 
+/// A trait to decied to skip databases, types or keys
 pub trait Filter {
     fn matches_db(&self, _db: u32) -> bool { true }
     fn matches_type(&self, _enc_type: u8) -> bool { true }
     fn matches_key(&self, _key: &[u8]) -> bool { true }
 }
 
+/// A filter to match by database, type or a regular expression against key names
 pub struct Simple {
     databases: Vec<u32>,
     types: Vec<Type>,

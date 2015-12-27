@@ -1,3 +1,5 @@
+//! Actual parser implementation
+
 use std::{str, f64};
 use std::io::Error as IoError;
 use std::io::ErrorKind as IoErrorKind;
@@ -51,7 +53,6 @@ pub use types::{
     RdbError,
     RdbResult,
     RdbOk,
-    EncodingType
 };
 
 pub struct RdbParser<R: Read, L: Filter> {

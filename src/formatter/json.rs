@@ -7,6 +7,7 @@ use std::str;
 use serialize::json;
 use super::write_str;
 
+/// Format the database as JSON objects
 pub struct JSON {
     out: Box<Write + 'static>,
     is_first_db: bool,

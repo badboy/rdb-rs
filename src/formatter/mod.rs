@@ -1,3 +1,4 @@
+//! Formatter trait and implementations for different output formats
 use std::io::{Read, Write};
 
 pub use self::nil::Nil;
@@ -15,10 +16,13 @@ mod json;
 mod protocol;
 
 
-pub fn write_str<W: Write>(out: &mut W, data: &str) {
+fn write_str<W: Write>(out: &mut W, data: &str) {
     out.write(data.as_bytes()).unwrap();
 }
 
+/// A formatter can be used to handle parsed items.
+///
+/// It defines several methods, that are called as callbacks on `formatter::print_formatted`.
 #[allow(unused_variables)]
 pub trait Formatter {
     fn start_rdb(&mut self) {}
@@ -50,6 +54,7 @@ pub trait Formatter {
     fn sorted_set_element(&mut self, key: &[u8], score: f64, member: &[u8]) {}
 }
 
+/// Parse input and output the formatted data according to the parser
 pub fn print_formatted<R: Read, F: Filter>(parser: RdbParser<R, F>, fmt: &mut Formatter) {
     let mut key: Option<Vec<u8>> = None;
     let mut expire = None;
