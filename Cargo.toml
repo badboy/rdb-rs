@@ -20,3 +20,7 @@ getopts = "0.2.14"
 rustc-serialize = "0.3.16"
 regex = "0.1.41"
 byteorder = "0.3.13"
+
+[[bin]]
+name = "rdb"
+doc = false
