@@ -20,7 +20,6 @@ pub fn write_str<W: Write>(out: &mut W, data: &str) {
 }
 
 #[allow(unused_variables)]
-#[rustfmt_skip]
 pub trait Formatter {
     fn start_rdb(&mut self) {}
     fn end_rdb(&mut self) {}
@@ -51,7 +50,6 @@ pub trait Formatter {
     fn sorted_set_element(&mut self, key: &[u8], score: f64, member: &[u8]) {}
 }
 
-#[rustfmt_skip]
 pub fn print_formatted<R: Read, F: Filter>(parser: RdbParser<R, F>, fmt: &mut Formatter) {
     let mut key: Option<Vec<u8>> = None;
     let mut expire = None;

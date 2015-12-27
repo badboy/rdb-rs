@@ -83,7 +83,6 @@ extern crate byteorder;
 use std::io::Read;
 
 #[doc(hidden)]
-#[rustfmt_skip]
 pub use types::{
     ZiplistEntry,
     Type,

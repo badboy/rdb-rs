@@ -2,7 +2,6 @@ use std::str;
 use regex::Regex;
 use types::Type;
 
-#[rustfmt_skip]
 pub trait Filter {
     fn matches_db(&self, _db: u32) -> bool { true }
     fn matches_type(&self, _enc_type: u8) -> bool { true }

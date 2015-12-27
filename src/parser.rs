@@ -43,7 +43,6 @@ pub type RdbIteratorResult = RdbResult<RdbIteratorType>;
 use constants::{version, constant, op_code, encoding_type, encoding};
 
 #[doc(hidden)]
-#[rustfmt_skip]
 pub use types::{
     ZiplistEntry,
     Type,
