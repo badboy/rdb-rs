@@ -902,7 +902,7 @@ impl<R: Read, F: Filter> RdbParser<R, F> {
             }
         };
 
-        for _ in (0..blobs_to_skip) {
+        for _ in 0..blobs_to_skip {
             try!(self.skip_blob())
         }
 

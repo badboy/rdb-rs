@@ -1,6 +1,6 @@
 use std::io::Read;
 use std::io::Result as IoResult;
-use std::io::ErrorKind;
+use std::io::{Error,ErrorKind};
 
 pub fn int_to_vec(number: i32) -> Vec<u8> {
     let number = number.to_string();
