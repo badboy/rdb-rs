@@ -35,8 +35,6 @@ unit-test: build
 www:
 	$(MAKE) -C www
 
-.PHONY: www
-
 www-upload:
 	$(MAKE) -C www upload
 
@@ -53,5 +51,14 @@ install: build-release
 	@mkdir -p $(INSTALL_BIN)
 	$(RDB_INSTALL) $(BINARY_PATH) $(INSTALL_BIN)
 
+tidy:
+	rustfmt src/lib.rs
+
 clean:
+	find . -name "*.bk" -delete
+
+dist-clean: clean
 	rm -r target
+
+.PHONY: www clean dist-clean tidy install upload
+

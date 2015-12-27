@@ -1,5 +1,6 @@
 use formatter::Formatter;
 
+/// Do not output anything
 pub struct Nil;
 
 impl Nil {

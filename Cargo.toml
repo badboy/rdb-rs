@@ -1,7 +1,7 @@
 [package]
 
 name = "rdb"
-version = "0.2.0"
+version = "1.0.0-alpha"
 authors = ["Jan-Erik Rediger <badboy@fnordig.de>"]
 
 keywords = ["redis", "database"]
@@ -14,14 +14,13 @@ homepage = "http://rdb.fnordig.de/"
 documentation = "http://rdb.fnordig.de/doc/rdb/"
 repository = "https://github.com/badboy/rdb-rs"
 
+[dependencies]
+lzf = "0.3.0"
+getopts = "0.2.14"
+rustc-serialize = "0.3.16"
+regex = "0.1.41"
+byteorder = "0.3.13"
+
 [[bin]]
 name = "rdb"
-path = "src/main.rs"
-doc  = false
-
-[dependencies]
-lzf = "*"
-getopts = "*"
-rustc-serialize = "*"
-regex = "*"
-byteorder = "*"
+doc = false

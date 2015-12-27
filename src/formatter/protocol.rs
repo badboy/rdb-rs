@@ -3,18 +3,21 @@
 use formatter::Formatter;
 use std::io;
 use std::io::Write;
-use types::EncodingType;
 use super::write_str;
 
+/// Format in the Redis protocol, useful to import
 pub struct Protocol {
-    out: Box<Write+'static>,
-    last_expiry: Option<u64>
+    out: Box<Write + 'static>,
+    last_expiry: Option<u64>,
 }
 
 impl Protocol {
     pub fn new() -> Protocol {
         let out = Box::new(io::stdout());
-        Protocol { out: out, last_expiry: None }
+        Protocol {
+            out: out,
+            last_expiry: None,
+        }
     }
 }
 
@@ -63,8 +66,7 @@ impl Formatter for Protocol {
         self.post_expire(key);
     }
 
-    fn start_hash(&mut self, _key: &[u8], _length: u32,
-                  expiry: Option<u64>, _info: EncodingType) {
+    fn start_hash(&mut self, _key: &[u8], _length: u32, expiry: Option<u64>) {
         self.pre_expire(expiry);
     }
     fn end_hash(&mut self, key: &[u8]) {
@@ -75,8 +77,7 @@ impl Formatter for Protocol {
     }
 
 
-    fn start_set(&mut self, _key: &[u8], _cardinality: u32,
-                 expiry: Option<u64>, _info: EncodingType) {
+    fn start_set(&mut self, _key: &[u8], _cardinality: u32, expiry: Option<u64>) {
         self.pre_expire(expiry);
     }
     fn end_set(&mut self, key: &[u8]) {
@@ -87,8 +88,7 @@ impl Formatter for Protocol {
     }
 
 
-    fn start_list(&mut self, _key: &[u8], _length: u32,
-                  expiry: Option<u64>, _info: EncodingType) {
+    fn start_list(&mut self, _key: &[u8], _length: u32, expiry: Option<u64>) {
         self.pre_expire(expiry);
     }
     fn end_list(&mut self, key: &[u8]) {
@@ -98,15 +98,13 @@ impl Formatter for Protocol {
         self.emit(vec!["RPUSH".as_bytes(), key, value]);
     }
 
-    fn start_sorted_set(&mut self, _key: &[u8], _length: u32,
-                        expiry: Option<u64>, _info: EncodingType) {
+    fn start_sorted_set(&mut self, _key: &[u8], _length: u32, expiry: Option<u64>) {
         self.pre_expire(expiry);
     }
     fn end_sorted_set(&mut self, key: &[u8]) {
         self.post_expire(key);
     }
-    fn sorted_set_element(&mut self, key: &[u8],
-                          score: f64, member: &[u8]) {
+    fn sorted_set_element(&mut self, key: &[u8], score: f64, member: &[u8]) {
         let score = score.to_string();
         self.emit(vec!["ZADD".as_bytes(), key, score.as_bytes(), member]);
     }

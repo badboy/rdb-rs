@@ -6,6 +6,11 @@ SCRIPT="$SCRIPTPATH/$(basename "$0")"
 
 DUMP_DIRECTORY="${SCRIPTPATH}/dumps"
 
+BUILD=1
+if [ "$1" = "--no-build" ]; then
+  BUILD=0
+  shift
+fi
 ARG=$1
 
 if [ ! -d "$DUMP_DIRECTORY" ]; then
@@ -13,7 +18,9 @@ if [ ! -d "$DUMP_DIRECTORY" ]; then
   exit 2
 fi
 
-cargo build $ARG
+if [ $BUILD -eq 1 ]; then
+  cargo build $ARG
+fi
 
 if [ "$ARG" = "--release" ]; then
   BIN=./target/release/rdb
@@ -24,16 +31,25 @@ fi
 failure=0
 for dump in $(find "$DUMP_DIRECTORY" -type f -name "*.rdb"); do
   file=$(basename $dump)
+  if [ "$file" = "regular_sorted_set.rdb" ]; then
+    echo "  [skipping $file]"
+    continue
+  fi
+
   echo "  with $file"
 
   json=$(basename $dump) 
   json=${json/.rdb/.json}
-  diff -q  \
-    <($BIN --format json $dump 2>/dev/null) \
-    $DUMP_DIRECTORY/json/$json >/dev/null 2>&1
+  diffout=$(diff -u \
+    <($BIN --format json $dump 2>/dev/null | json) \
+    <(json <$DUMP_DIRECTORY/json/$json 2>&1))
 
   if [ $? -ne 0 ]; then
     echo "Failure with '$file'"
+    echo
+    echo "---------"
+    echo "$diffout"
+    echo "---------"
     failure=1
   fi
 done

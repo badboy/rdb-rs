@@ -2,16 +2,16 @@ extern crate rdb;
 extern crate getopts;
 extern crate regex;
 use std::env;
-use std::io::{BufReader,Write};
+use std::io::BufReader;
 use std::fs::File;
 use std::path::Path;
 use getopts::Options;
 use regex::Regex;
 
-fn print_usage(program: &str, opts: Options) {
+fn print_usage(program: &str, opts: Options) -> ! {
     let brief = format!("Usage: {} [options] dump.rdb", program);
     print!("{}", opts.usage(&brief));
-
+    std::process::exit(0);
 }
 
 pub fn main() {
@@ -31,13 +31,11 @@ pub fn main() {
         Err(e) => {
             println!("{}\n", e);
             print_usage(&program, opts);
-            return;
         }
     };
 
     if matches.opt_present("h") {
          print_usage(&program, opts);
-         return;
     }
 
     let mut filter = rdb::filter::Simple::new();
@@ -56,7 +54,6 @@ pub fn main() {
             _ => {
                 println!("Unknown type: {}\n", t);
                 print_usage(&program, opts);
-                return;
             }
         };
         filter.add_type(typ);
@@ -68,7 +65,6 @@ pub fn main() {
             Err(err) => {
                 println!("Incorrect regexp: {:?}\n", err);
                 print_usage(&program, opts);
-                return;
             }
         };
         filter.add_keys(re);
@@ -76,47 +72,29 @@ pub fn main() {
 
     if matches.free.is_empty() {
         print_usage(&program, opts);
-        return;
     }
 
     let path = matches.free[0].clone();
     let file = File::open(&Path::new(&*path)).unwrap();
     let reader = BufReader::new(file);
+    let parser = rdb::parse(reader, filter);
 
-    let mut res = Ok(());
+    let mut formatter;
 
     if let Some(f) = matches.opt_str("f") {
-        match &f[..] {
-            "json" => {
-                res = rdb::parse(reader, rdb::formatter::JSON::new(), filter);
-            },
-            "plain" => {
-                res = rdb::parse(reader, rdb::formatter::Plain::new(), filter);
-            },
-            "nil" => {
-                res = rdb::parse(reader, rdb::formatter::Nil::new(), filter);
-            },
-            "protocol" => {
-                res = rdb::parse(reader, rdb::formatter::Protocol::new(), filter);
-
-            },
+        formatter = match &f[..] {
+            "json"     => Box::new(rdb::formatter::JSON::new())     as Box<rdb::formatter::Formatter>,
+            "plain"    => Box::new(rdb::formatter::Plain::new())    as Box<rdb::formatter::Formatter>,
+            "nil"      => Box::new(rdb::formatter::Nil::new())      as Box<rdb::formatter::Formatter>,
+            "protocol" => Box::new(rdb::formatter::Protocol::new()) as Box<rdb::formatter::Formatter>,
             _ => {
                 println!("Unknown format: {}\n", f);
                 print_usage(&program, opts);
             }
-        }
+        };
     } else {
-        res = rdb::parse(reader, rdb::formatter::JSON::new(), filter);
+        formatter = Box::new(rdb::formatter::JSON::new()) as Box<rdb::formatter::Formatter>;
     }
 
-    match res {
-        Ok(()) => {},
-        Err(e) => {
-            println!("");
-            let mut stderr = std::io::stderr();
-
-            let out = format!("Parsing failed: {}\n", e);
-            stderr.write(out.as_bytes()).unwrap();
-        }
-    }
+    rdb::formatter::print_formatted(parser, &mut *formatter);
 }

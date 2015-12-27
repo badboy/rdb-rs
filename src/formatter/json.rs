@@ -5,16 +5,16 @@ use std::io;
 use std::io::Write;
 use std::str;
 use serialize::json;
-use types::EncodingType;
 use super::write_str;
 
+/// Format the database as JSON objects
 pub struct JSON {
-    out: Box<Write+'static>,
+    out: Box<Write + 'static>,
     is_first_db: bool,
     has_databases: bool,
     is_first_key_in_db: bool,
     elements_in_key: u32,
-    element_index: u32
+    element_index: u32,
 }
 
 impl JSON {
@@ -26,13 +26,13 @@ impl JSON {
             has_databases: false,
             is_first_key_in_db: true,
             elements_in_key: 0,
-            element_index: 0
+            element_index: 0,
         }
     }
 }
 
 fn encode_to_ascii(value: &[u8]) -> String {
-    let s = unsafe{str::from_utf8_unchecked(value)};
+    let s = unsafe { str::from_utf8_unchecked(value) };
     json::encode(&s).unwrap()
 }
 
@@ -46,8 +46,6 @@ impl JSON {
         self.elements_in_key = length;
         self.element_index = 0;
     }
-
-    fn end_key(&mut self) { }
 
     fn write_comma(&mut self) {
         if self.element_index > 0 {
@@ -94,8 +92,7 @@ impl Formatter for JSON {
         self.write_value(value);
     }
 
-    fn start_hash(&mut self, key: &[u8], length: u32,
-                  _expiry: Option<u64>, _info: EncodingType) {
+    fn start_hash(&mut self, key: &[u8], length: u32, _expiry: Option<u64>) {
         self.start_key(length);
         self.write_key(key);
         write_str(&mut self.out, ":{");
@@ -103,7 +100,6 @@ impl Formatter for JSON {
     }
 
     fn end_hash(&mut self, _key: &[u8]) {
-        self.end_key();
         write_str(&mut self.out, "}");
         self.out.flush();
     }
@@ -116,8 +112,7 @@ impl Formatter for JSON {
         self.out.flush();
     }
 
-    fn start_set(&mut self, key: &[u8], cardinality: u32,
-                 _expiry: Option<u64>, _info: EncodingType) {
+    fn start_set(&mut self, key: &[u8], cardinality: u32, _expiry: Option<u64>) {
         self.start_key(cardinality);
         self.write_key(key);
         write_str(&mut self.out, ":[");
@@ -125,7 +120,6 @@ impl Formatter for JSON {
     }
 
     fn end_set(&mut self, _key: &[u8]) {
-        self.end_key();
         write_str(&mut self.out, "]");
     }
 
@@ -134,15 +128,13 @@ impl Formatter for JSON {
         self.write_value(member);
     }
 
-    fn start_list(&mut self, key: &[u8], length: u32,
-                  _expiry: Option<u64>, _info: EncodingType) {
+    fn start_list(&mut self, key: &[u8], length: u32, _expiry: Option<u64>) {
         self.start_key(length);
         self.write_key(key);
         write_str(&mut self.out, ":[");
     }
 
     fn end_list(&mut self, _key: &[u8]) {
-        self.end_key();
         write_str(&mut self.out, "]");
     }
 
@@ -151,20 +143,17 @@ impl Formatter for JSON {
         self.write_value(value);
     }
 
-    fn start_sorted_set(&mut self, key: &[u8], length: u32,
-                        _expiry: Option<u64>, _info: EncodingType) {
+    fn start_sorted_set(&mut self, key: &[u8], length: u32, _expiry: Option<u64>) {
         self.start_key(length);
         self.write_key(key);
         write_str(&mut self.out, ":{");
     }
 
     fn end_sorted_set(&mut self, _key: &[u8]) {
-        self.end_key();
         write_str(&mut self.out, "}");
     }
 
-    fn sorted_set_element(&mut self, _key: &[u8],
-                          score: f64, member: &[u8]) {
+    fn sorted_set_element(&mut self, _key: &[u8], score: f64, member: &[u8]) {
         self.write_comma();
         self.write_key(member);
         write_str(&mut self.out, ":");

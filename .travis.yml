@@ -1,2 +1,14 @@
 language: rust
+sudo: false
+
+# run builds for both all the trains
+rust:
+  - nightly
+  - beta
+  - stable
+
+before_script:
+  # Needed for pretty-printing the equality test failures
+  - npm install -g json
+
 script: make test

@@ -11,7 +11,7 @@
 //!
 //! ```ini
 //! [dependencies]
-//! rdb = "*"
+//! rdb = "1.0.0"
 //! ```
 //!
 //! # Basic operation
@@ -27,7 +27,10 @@
 //! # use std::path::Path;
 //! let file = File::open(&Path::new("dump.rdb")).unwrap();
 //! let reader = BufReader::new(file);
-//! rdb::parse(reader, rdb::formatter::JSON::new(), rdb::filter::Simple::new());
+//! let parser = rdb::parse(reader, rdb::filter::Simple::new());
+//! for value in parser {
+//!     // handle_value(value);
+//! }
 //! ```
 //!
 //! # Formatter
@@ -87,24 +90,25 @@ pub use types::{
     /* error and result types */
     RdbError,
     RdbResult,
-    RdbOk,
+    RdbOk
 };
 
 pub use parser::RdbParser;
+pub use iterator_type::RdbIteratorType;
 
-use formatter::Formatter;
 use filter::Filter;
 
 mod macros;
 mod constants;
 mod helper;
+mod iterator_type;
 
 pub mod types;
 pub mod parser;
-pub mod formatter;
 pub mod filter;
+pub mod formatter;
 
-pub fn parse<R: Read, F: Formatter, T: Filter>(input: R, formatter: F, filter: T) -> RdbOk {
-    let mut parser = RdbParser::new(input, formatter, filter);
-    parser.parse()
+pub fn parse<R: Read, F: Filter>(input: R, filter: F) -> RdbParser<R, F> {
+    let parser = RdbParser::new(input, filter);
+    parser
 }
