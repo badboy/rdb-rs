@@ -34,7 +34,15 @@ use std::path::Path;
 
 let file = File::open(&Path::new("dump.rdb")).unwrap();
 let reader = BufReader::new(file);
-rdb::parse(reader, rdb::formatter::JSON::new(), rdb::filter::Simple::new());
+
+let parser = rdb::parse(reader, filter);
+
+for value in parser {
+    match value.unwrap() {
+        Key(key, exp) => println!("Found key: {}", key),
+        _ => println!("Found something else: {:?}", key),
+    }
+}
 ```
 
 ### Formatter
