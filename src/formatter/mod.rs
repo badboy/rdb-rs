@@ -64,7 +64,6 @@ pub fn print_formatted<R: Read, F: Filter>(parser: RdbParser<R, F>, fmt: &mut Fo
             ResizeDB(a, b)     => fmt.resizedb(a, b),
             AuxiliaryKey(a,b)  => fmt.aux_field(&a, &b),
             Checksum(cks)      => fmt.checksum(&cks),
-            Ended              => fmt.end_rdb(),
             Key(k, exp)        => {
                 key = Some(k);
                 expire = exp;
