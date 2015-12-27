@@ -11,7 +11,7 @@
 //!
 //! ```ini
 //! [dependencies]
-//! rdb = "*"
+//! rdb = "1.0.0"
 //! ```
 //!
 //! # Basic operation
