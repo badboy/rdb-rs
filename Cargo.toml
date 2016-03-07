@@ -14,6 +14,15 @@ homepage = "http://rdb.fnordig.de/"
 documentation = "http://rdb.fnordig.de/doc/rdb/"
 repository = "https://github.com/badboy/rdb-rs"
 
+include = [
+  "Cargo.toml",
+  "README*",
+  "LICENSE*",
+  "src/**/*",
+  "tests/**/*",
+  "examples/**/*",
+]
+
 [[bin]]
 name = "rdb"
 path = "src/main.rs"
