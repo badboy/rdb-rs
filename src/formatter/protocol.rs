@@ -39,7 +39,7 @@ impl Protocol {
     fn post_expire(&mut self, key: &[u8]) {
         if let Some(expire) = self.last_expiry {
             let expire = expire.to_string();
-            self.emit(vec!["EXPIREAT".as_bytes(), key, expire.as_bytes()]);
+            self.emit(vec!["PEXPIREAT".as_bytes(), key, expire.as_bytes()]);
             self.last_expiry = None;
         }
     }
