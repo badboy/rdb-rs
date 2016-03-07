@@ -1,7 +1,8 @@
 # rdb-rs - RDB parsing, formatting, analyzing. All in one library
 
-[![Build Status](https://travis-ci.org/badboy/rdb-rs.svg?branch=master)](https://travis-ci.org/badboy/rdb-rs)
 [![crates.io](http://meritbadge.herokuapp.com/rdb)](https://crates.io/crates/rdb)
+[![Build Status](https://travis-ci.org/badboy/rdb-rs.svg?branch=master)](https://travis-ci.org/badboy/rdb-rs)
+[![Clippy Linting Result](http://clippy.bashy.io/github/badboy/rdb-rs/master/badge.svg)](http://clippy.bashy.io/github/badboy/rdb-rs/master/log)
 
 Inspired and based on [redis-rdb-tools][].
 
