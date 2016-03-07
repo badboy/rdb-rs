@@ -45,7 +45,7 @@ fn other_error(desc: &'static str) -> IoError {
 }
 
 pub fn read_length_with_encoding<R: Read>(input: &mut R) -> RdbResult<(u32, bool)> {
-    let mut length;
+    let length;
     let mut is_encoded = false;
 
     let enc_type = try!(input.read_u8());
@@ -313,8 +313,8 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
             };
         }
 
-        let mut length : u64;
-        let mut number_value : i64;
+        let length : u64;
+        let number_value : i64;
 
         // 2. Read flag or number value
         let flag = try!(ziplist.read_u8());
@@ -393,7 +393,7 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
                                   self.last_expiretime,
                                   EncodingType::Ziplist(raw_length));
 
-        for _ in (0..zllen) {
+        for _ in 0..zllen {
             let entry = try!(self.read_ziplist_entry_string(&mut reader));
             self.formatter.list_element(key, &entry);
         }
@@ -422,7 +422,7 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
                                   self.last_expiretime,
                                   EncodingType::Ziplist(raw_length));
 
-        for _ in (0..zllen) {
+        for _ in 0..zllen {
             let field = try!(self.read_ziplist_entry_string(&mut reader));
             let value = try!(self.read_ziplist_entry_string(&mut reader));
             self.formatter.hash_element(key, &field, &value);
@@ -452,7 +452,7 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
         assert!(zllen%2 == 0);
         let zllen = zllen / 2;
 
-        for _ in (0..zllen) {
+        for _ in 0..zllen {
             let entry = try!(self.read_ziplist_entry_string(&mut reader));
             let score = try!(self.read_ziplist_entry_string(&mut reader));
             let score = str::from_utf8(&score)
@@ -477,7 +477,7 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
         let mut reader = Cursor::new(ziplist);
         let (_zlbytes, _zltail, zllen) = try!(read_ziplist_metadata(&mut reader));
 
-        for _ in (0..zllen) {
+        for _ in 0..zllen {
             let entry = try!(self.read_ziplist_entry_string(&mut reader));
             self.formatter.list_element(key, &entry);
         }
@@ -491,7 +491,7 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
     }
 
     fn read_zipmap_entry<T: Read>(&mut self, next_byte: u8, zipmap: &mut T) -> RdbResult<Vec<u8>> {
-        let mut elem_len;
+        let elem_len;
         match next_byte {
             253 => { elem_len = zipmap.read_u32::<LittleEndian>().unwrap()  },
             254 | 255 => {
@@ -512,7 +512,7 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
         let zmlen = try!(reader.read_u8());
 
         let mut length : i32;
-        let mut size;
+        let size;
         if zmlen <= 254 {
             length = zmlen as i32;
             size = zmlen
@@ -569,7 +569,7 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
         self.formatter.start_set(key, intset_length, self.last_expiretime,
                                  EncodingType::Intset(raw_length));
 
-        for _ in (0..intset_length) {
+        for _ in 0..intset_length {
             let val = match byte_size {
                 2 => try!(reader.read_i16::<LittleEndian>()) as i64,
                 4 => try!(reader.read_i32::<LittleEndian>()) as i64,
@@ -589,7 +589,7 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
         let len = try!(read_length(&mut self.input));
 
         self.formatter.start_set(key, 0, self.last_expiretime, EncodingType::Quicklist);
-        for _ in (0..len) {
+        for _ in 0..len {
             try!(self.read_quicklist_ziplist(key));
         }
         self.formatter.end_set(key);
@@ -650,7 +650,7 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
 
     fn skip_blob(&mut self) -> RdbResult<()> {
         let (len, is_encoded) = unwrap_or_panic!(read_length_with_encoding(&mut self.input));
-        let mut skip_bytes;
+        let skip_bytes;
 
         if is_encoded {
             skip_bytes = match len {
@@ -684,7 +684,7 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
             _ => { panic!("Unknown encoding type: {}", enc_type) }
         };
 
-        for _ in (0..blobs_to_skip) {
+        for _ in 0..blobs_to_skip {
             try!(self.skip_blob())
         }
 
