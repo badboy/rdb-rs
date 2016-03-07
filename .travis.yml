@@ -1,2 +1,13 @@
 language: rust
+
+rust:
+  - stable
+  - nightly
+  - beta
+  - 1.5.0
+
+
 script: make test
+
+notifications:
+  email: false
