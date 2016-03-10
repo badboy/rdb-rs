@@ -6,7 +6,6 @@ pub trait Filter {
     fn matches_db(&self, _db: u32) -> bool { true }
     fn matches_type(&self, _enc_type: u8) -> bool { true }
     fn matches_key(&self, _key: &[u8]) -> bool { true }
-
 }
 
 pub struct Simple {

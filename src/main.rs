@@ -19,7 +19,7 @@ pub fn main() {
     let program = args.next().unwrap();
     let mut opts = Options::new();
 
-    opts.optopt("f", "format", "Format to output. Valid: json, plain, nil, protocol", "FORMAT");
+    opts.optopt("f", "format", "Format to output. Valid: json, hex-keys, plain, nil, protocol", "FORMAT");
     opts.optopt("k", "keys", "Keys to show. Can be a regular expression", "KEYS");
     opts.optmulti("d", "databases", "Database to show. Can be specified multiple times", "DB");
     opts.optmulti("t", "type", "Type to show. Can be specified multiple times", "TYPE");
@@ -89,6 +89,9 @@ pub fn main() {
         match &f[..] {
             "json" => {
                 res = rdb::parse(reader, rdb::formatter::JSON::new(), filter);
+            },
+            "hex-keys" => {
+                res = rdb::parse(reader, rdb::formatter::HexKeys::new(), filter);
             },
             "plain" => {
                 res = rdb::parse(reader, rdb::formatter::Plain::new(), filter);

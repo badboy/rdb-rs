@@ -158,6 +158,8 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
         try!(verify_magic(&mut self.input));
         try!(verify_version(&mut self.input));
 
+        let should_read_objects = self.formatter.should_read_objects();
+
         self.formatter.start_rdb();
 
         let mut last_database : u32 = 0;
@@ -209,7 +211,12 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
                         let key = try!(read_blob(&mut self.input));
 
                         if self.filter.matches_type(next_op) && self.filter.matches_key(&key) {
-                            try!(self.read_type(&key, next_op));
+                            if should_read_objects {
+                                try!(self.read_type(&key, next_op));
+                            } else {
+                                self.formatter.matched_key(&key);
+                                try!(self.skip_object(next_op));
+                            }
                         } else {
                             try!(self.skip_object(next_op));
                         }
@@ -640,10 +647,8 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
     }
 
     fn skip(&mut self, skip_bytes: usize) -> RdbResult<()> {
-        let mut buf = Vec::with_capacity(skip_bytes);
-        match self.input.read(&mut buf) {
-            Ok(n) if n == skip_bytes => Ok(()),
-            Ok(_) => Err(other_error("Can't skip number of requested bytes")),
+        match read_exact(&mut self.input, skip_bytes) {
+            Ok(_) => Ok(()),
             Err(e) => Err(e)
         }
     }
