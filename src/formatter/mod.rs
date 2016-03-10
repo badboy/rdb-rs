@@ -3,11 +3,13 @@ use std::io::Write;
 pub use self::nil::Nil;
 pub use self::plain::Plain;
 pub use self::json::JSON;
+pub use self::hexkeys::HexKeys;
 pub use self::protocol::Protocol;
 
 use super::types::EncodingType;
 
 pub mod nil;
+pub mod hexkeys;
 pub mod plain;
 pub mod json;
 pub mod protocol;
@@ -23,11 +25,15 @@ pub trait Formatter {
     fn end_rdb(&mut self) {}
     fn checksum(&mut self, checksum: &[u8]) {}
 
+    fn should_read_objects(&mut self) -> bool { true }
+
     fn start_database(&mut self, db_index: u32) {}
     fn end_database(&mut self, db_index: u32) {}
 
     fn resizedb(&mut self, db_size: u32, expires_size: u32) {}
     fn aux_field(&mut self, key: &[u8], value: &[u8]) {}
+
+    fn matched_key(&mut self, _key: &[u8]) {}
 
     fn set(&mut self, key: &[u8], value: &[u8], expiry: Option<u64>) {}
 
