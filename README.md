@@ -17,6 +17,8 @@ Online at [rdb.fnordig.de/doc/rdb/][doc].
 cargo build --release
 ```
 
+Minimum required Rust version: 1.6.0
+
 ## Install
 
 ```

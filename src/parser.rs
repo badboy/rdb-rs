@@ -640,12 +640,8 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
     }
 
     fn skip(&mut self, skip_bytes: usize) -> RdbResult<()> {
-        let mut buf = Vec::with_capacity(skip_bytes);
-        match self.input.read(&mut buf) {
-            Ok(n) if n == skip_bytes => Ok(()),
-            Ok(_) => Err(other_error("Can't skip number of requested bytes")),
-            Err(e) => Err(e)
-        }
+        let mut buf = vec![0; skip_bytes];
+        self.input.read_exact(&mut buf)
     }
 
     fn skip_blob(&mut self) -> RdbResult<()> {
@@ -679,7 +675,9 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
                 encoding_type::SET_INTSET |
                 encoding_type::ZSET_ZIPLIST |
                 encoding_type::HASH_ZIPLIST => 1,
-            encoding_type::LIST | encoding_type::SET => unwrap_or_panic!(read_length(&mut self.input)),
+            encoding_type::LIST |
+                encoding_type::SET |
+                encoding_type::LIST_QUICKLIST => unwrap_or_panic!(read_length(&mut self.input)),
             encoding_type::ZSET | encoding_type::HASH => unwrap_or_panic!(read_length(&mut self.input)) * 2,
             _ => { panic!("Unknown encoding type: {}", enc_type) }
         };

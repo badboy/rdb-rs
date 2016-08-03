@@ -33,6 +33,14 @@ for f in $FORMATS; do
       echo "Failure with '$dump' (Format: $f)"
       failure=1
     fi
+
+    echo "  with $dump, only database 1"
+    $BIN --format $f --databases 1 $dump >/dev/null
+
+    if [ $? -ne 0 ]; then
+      echo "Failure with '$dump' (Format: $f, only database 1)"
+      failure=1
+    fi
   done
 done
 
