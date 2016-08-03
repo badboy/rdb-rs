@@ -640,7 +640,7 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
     }
 
     fn skip(&mut self, skip_bytes: usize) -> RdbResult<()> {
-        let mut buf = Vec::with_capacity(skip_bytes);
+        let mut buf = vec![0; skip_bytes];
         match self.input.read(&mut buf) {
             Ok(n) if n == skip_bytes => Ok(()),
             Ok(_) => Err(other_error("Can't skip number of requested bytes")),
