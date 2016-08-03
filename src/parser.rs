@@ -675,7 +675,9 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
                 encoding_type::SET_INTSET |
                 encoding_type::ZSET_ZIPLIST |
                 encoding_type::HASH_ZIPLIST => 1,
-            encoding_type::LIST | encoding_type::SET => unwrap_or_panic!(read_length(&mut self.input)),
+            encoding_type::LIST |
+                encoding_type::SET |
+                encoding_type::LIST_QUICKLIST => unwrap_or_panic!(read_length(&mut self.input)),
             encoding_type::ZSET | encoding_type::HASH => unwrap_or_panic!(read_length(&mut self.input)) * 2,
             _ => { panic!("Unknown encoding type: {}", enc_type) }
         };
