@@ -23,11 +23,11 @@ impl Protocol {
         write_str(&mut self.out, "*");
         self.out.write_all(args.len().to_string().as_bytes());
         write_str(&mut self.out, "\r\n");
-        for arg in args.iter() {
+        for arg in &args {
             write_str(&mut self.out, "$");
             self.out.write_all(arg.len().to_string().as_bytes());
             write_str(&mut self.out, "\r\n");
-            self.out.write_all(&arg);
+            self.out.write_all(arg);
             write_str(&mut self.out, "\r\n");
         }
     }

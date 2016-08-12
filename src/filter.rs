@@ -9,6 +9,7 @@ pub trait Filter {
 
 }
 
+#[derive(Default)]
 pub struct Simple {
     databases: Vec<u32>,
     types: Vec<Type>,
@@ -16,9 +17,7 @@ pub struct Simple {
 }
 
 impl Simple {
-    pub fn new() -> Simple {
-        Simple { databases: vec![], types: vec![], keys: None }
-    }
+    pub fn new() -> Simple { Simple::default() }
 
     pub fn add_database(&mut self, db: u32) {
         self.databases.push(db);

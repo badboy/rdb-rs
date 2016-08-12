@@ -36,19 +36,19 @@ impl Formatter for Plain {
 
     fn set(&mut self, key: &[u8], value: &[u8], _expiry: Option<u64>) {
         self.write_line_start();
-        self.out.write_all(&key);
+        self.out.write_all(key);
         write_str(&mut self.out, " -> ");
 
-        self.out.write_all(&value);
+        self.out.write_all(value);
         write_str(&mut self.out, "\n");
         self.out.flush();
     }
 
     fn aux_field(&mut self, key: &[u8], value: &[u8]) {
         write_str(&mut self.out, "aux ");
-        self.out.write_all(&key);
+        self.out.write_all(key);
         write_str(&mut self.out, " -> ");
-        self.out.write_all(&value);
+        self.out.write_all(value);
         write_str(&mut self.out, "\n");
         self.out.flush();
     }
@@ -56,11 +56,11 @@ impl Formatter for Plain {
     fn hash_element(&mut self, key: &[u8], field: &[u8], value: &[u8]) {
         self.write_line_start();
 
-        self.out.write_all(&key);
+        self.out.write_all(key);
         write_str(&mut self.out, " . ");
-        self.out.write_all(&field);
+        self.out.write_all(field);
         write_str(&mut self.out, " -> ");
-        self.out.write_all(&value);
+        self.out.write_all(value);
         write_str(&mut self.out, "\n");
         self.out.flush();
     }
@@ -68,9 +68,9 @@ impl Formatter for Plain {
     fn set_element(&mut self, key: &[u8], member: &[u8]) {
         self.write_line_start();
 
-        self.out.write_all(&key);
+        self.out.write_all(key);
         write_str(&mut self.out, " { ");
-        self.out.write_all(&member);
+        self.out.write_all(member);
         write_str(&mut self.out, " } ");
         write_str(&mut self.out, "\n");
         self.out.flush();
@@ -83,10 +83,10 @@ impl Formatter for Plain {
     fn list_element(&mut self, key: &[u8], value: &[u8]) {
         self.write_line_start();
 
-        self.out.write_all(&key);
+        self.out.write_all(key);
         write_str(&mut self.out, &format!("[{}]", self.index));
         write_str(&mut self.out, " -> ");
-        self.out.write_all(&value);
+        self.out.write_all(value);
         write_str(&mut self.out, "\n");
         self.out.flush();
         self.index += 1;
@@ -101,10 +101,10 @@ impl Formatter for Plain {
                           score: f64, member: &[u8]) {
         self.write_line_start();
 
-        self.out.write_all(&key);
+        self.out.write_all(key);
         write_str(&mut self.out, &format!("[{}]", self.index));
         write_str(&mut self.out, " -> {");
-        self.out.write_all(&member);
+        self.out.write_all(member);
         write_str(&mut self.out, &format!(", score={}", score));
         write_str(&mut self.out, "}\n");
         self.out.flush();
