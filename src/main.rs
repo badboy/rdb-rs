@@ -42,11 +42,11 @@ pub fn main() {
 
     let mut filter = rdb::filter::Simple::new();
 
-    for db in matches.opt_strs("d").iter() {
+    for db in &matches.opt_strs("d") {
         filter.add_database(db.parse().unwrap());
     }
 
-    for t in matches.opt_strs("t").iter() {
+    for t in &matches.opt_strs("t") {
         let typ = match &t[..] {
             "string" => rdb::Type::String,
             "list" => rdb::Type::List,
