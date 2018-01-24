@@ -73,9 +73,11 @@
 //! ```
 
 extern crate lzf;
-extern crate rustc_serialize as serialize;
+extern crate serde;
+extern crate serde_json;
 extern crate regex;
 extern crate byteorder;
+extern crate hex;
 
 use std::io::Read;
 

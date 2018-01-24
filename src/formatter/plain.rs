@@ -2,7 +2,7 @@
 use formatter::Formatter;
 use std::io;
 use std::io::Write;
-use serialize::hex::ToHex;
+use hex::ToHex;
 use types::EncodingType;
 use super::write_str;
 
@@ -26,7 +26,9 @@ impl Plain {
 impl Formatter for Plain {
     fn checksum(&mut self, checksum: &[u8]) {
         write_str(&mut self.out, "checksum ");
-        write_str(&mut self.out, &checksum.to_hex());
+        let mut s = String::new();
+        checksum.write_hex(&mut s);
+        write_str(&mut self.out, &s);
         write_str(&mut self.out, "\n");
     }
 

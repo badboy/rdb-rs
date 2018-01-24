@@ -3,10 +3,9 @@
 use formatter::Formatter;
 use std::io;
 use std::io::Write;
-use std::str;
-use serialize::json;
 use types::EncodingType;
 use super::write_str;
+use serde_json;
 
 pub struct JSON {
     out: Box<Write+'static>,
@@ -32,8 +31,9 @@ impl JSON {
 }
 
 fn encode_to_ascii(value: &[u8]) -> String {
-    let s = unsafe{str::from_utf8_unchecked(value)};
-    json::encode(&s).unwrap()
+    let mut buf = Vec::new();
+    serde_json::to_writer(&mut buf, value).expect("Can't serialize to JSON");
+    String::from_utf8(buf).expect("JSON-encoded value is not valid UTF-8")
 }
 
 impl JSON {
