@@ -32,7 +32,8 @@ impl JSON {
 
 fn encode_to_ascii(value: &[u8]) -> String {
     let mut buf = Vec::new();
-    serde_json::to_writer(&mut buf, value).expect("Can't serialize to JSON");
+    let value = String::from_utf8_lossy(value);
+    serde_json::to_writer(&mut buf, value.as_ref()).expect("Can't serialize to JSON");
     String::from_utf8(buf).expect("JSON-encoded value is not valid UTF-8")
 }
 
