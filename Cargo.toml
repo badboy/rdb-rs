@@ -31,6 +31,8 @@ doc  = false
 [dependencies]
 lzf = "0.3"
 getopts = "0.2"
-rustc-serialize = "0.3"
+serde = "1.0"
+serde_json = "1.0"
 regex = "0.1"
 byteorder = "0.5"
+hex = "0.3"
