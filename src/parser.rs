@@ -166,7 +166,7 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
 
             match next_op {
                 op_code::SELECTDB => {
-                    last_database = unwrap_or_panic!(read_length(&mut self.input));
+                    last_database = read_length(&mut self.input).unwrap();
                     if self.filter.matches_db(last_database) {
                         self.formatter.start_database(last_database);
                     }
@@ -254,7 +254,7 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
     }
 
     fn read_sorted_set(&mut self, key: &[u8]) -> RdbOk {
-        let mut set_items = unwrap_or_panic!(read_length(&mut self.input));
+        let mut set_items = read_length(&mut self.input).unwrap();
 
         self.formatter.start_sorted_set(key, set_items, self.last_expiretime, EncodingType::Hashtable);
 
@@ -645,7 +645,7 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
     }
 
     fn skip_blob(&mut self) -> RdbResult<()> {
-        let (len, is_encoded) = unwrap_or_panic!(read_length_with_encoding(&mut self.input));
+        let (len, is_encoded) = read_length_with_encoding(&mut self.input).unwrap();
         let skip_bytes;
 
         if is_encoded {
@@ -654,8 +654,8 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
                 encoding::INT16 => 2,
                 encoding::INT32 => 4,
                 encoding::LZF => {
-                    let compressed_length = unwrap_or_panic!(read_length(&mut self.input));
-                    let _real_length = unwrap_or_panic!(read_length(&mut self.input));
+                    let compressed_length = read_length(&mut self.input).unwrap();
+                    let _real_length = read_length(&mut self.input).unwrap();
                     compressed_length
                 },
                 _ => { panic!("Unknown encoding: {}", len) }
@@ -677,8 +677,8 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
                 encoding_type::HASH_ZIPLIST => 1,
             encoding_type::LIST |
                 encoding_type::SET |
-                encoding_type::LIST_QUICKLIST => unwrap_or_panic!(read_length(&mut self.input)),
-            encoding_type::ZSET | encoding_type::HASH => unwrap_or_panic!(read_length(&mut self.input)) * 2,
+                encoding_type::LIST_QUICKLIST => read_length(&mut self.input).unwrap(),
+            encoding_type::ZSET | encoding_type::HASH => read_length(&mut self.input).unwrap() * 2,
             _ => { panic!("Unknown encoding type: {}", enc_type) }
         };
 

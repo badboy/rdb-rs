@@ -97,7 +97,6 @@ pub use parser::RdbParser;
 use formatter::Formatter;
 use filter::Filter;
 
-mod macros;
 mod constants;
 mod helper;
 
