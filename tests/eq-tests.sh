@@ -34,6 +34,11 @@ for dump in $(find "$DUMP_DIRECTORY" -type f -name "*.rdb"); do
 
   if [ $? -ne 0 ]; then
     echo "Failure with '$file'"
+    echo "Command run:"
+    printf "  %s\n" "$BIN --format json $dump"
+    echo "Compared to:"
+    printf "  %s\n" "$DUMP_DIRECTORY/json/$json"
+
     failure=1
   fi
 done
