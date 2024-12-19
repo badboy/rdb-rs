@@ -11,10 +11,17 @@ pub struct Protocol {
 }
 
 impl Protocol {
-    pub fn new() -> Protocol {
-        let out = Box::new(io::stdout());
+    pub fn new(file_path: Option<&str>) -> Protocol {
+        let out: Box<dyn Write> = match file_path {
+            Some(path) => match std::fs::File::create(path) {
+                Ok(file) => Box::new(file),
+                Err(_) => Box::new(io::stdout()),
+            },
+            None => Box::new(io::stdout()),
+        };
+
         Protocol {
-            out: out,
+            out,
             last_expiry: None,
         }
     }

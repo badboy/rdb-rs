@@ -17,10 +17,17 @@ pub struct JSON {
 }
 
 impl JSON {
-    pub fn new() -> JSON {
-        let out = Box::new(io::stdout());
+    pub fn new(file_path: Option<&str>) -> JSON {
+        let out: Box<dyn Write> = match file_path {
+            Some(path) => match std::fs::File::create(path) {
+                Ok(file) => Box::new(file),
+                Err(_) => Box::new(io::stdout()),
+            },
+            None => Box::new(io::stdout()),
+        };
+
         JSON {
-            out: out,
+            out,
             is_first_db: true,
             has_databases: false,
             is_first_key_in_db: true,
@@ -34,7 +41,8 @@ fn encode_to_ascii(value: &[u8]) -> String {
     match str::from_utf8(value) {
         Ok(s) => json::encode(&s).unwrap(),
         Err(_) => {
-            let s: String = value.iter()
+            let s: String = value
+                .iter()
                 .map(|&b| if b < 128 { b as char } else { '\u{FFFD}' })
                 .collect();
             json::encode(&s).unwrap()

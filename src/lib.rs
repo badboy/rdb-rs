@@ -27,7 +27,7 @@
 //! # use std::path::Path;
 //! let file = File::open(&Path::new("dump.rdb")).unwrap();
 //! let reader = BufReader::new(file);
-//! rdb::parse(reader, rdb::formatter::JSON::new(), rdb::filter::Simple::new());
+//! rdb::parse(reader, rdb::formatter::JSON::new(None), rdb::filter::Simple::new());
 //! ```
 //!
 //! # Formatter

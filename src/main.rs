@@ -82,10 +82,10 @@ pub fn main() {
 
     // Parse with the specified formatter
     let res = match cli.format.as_deref().unwrap_or("json") {
-        "json" => rdb::parse(reader, rdb::formatter::JSON::new(), filter),
-        "plain" => rdb::parse(reader, rdb::formatter::Plain::new(), filter),
-        "nil" => rdb::parse(reader, rdb::formatter::Nil::new(), filter),
-        "protocol" => rdb::parse(reader, rdb::formatter::Protocol::new(), filter),
+        "json" => rdb::parse(reader, rdb::formatter::JSON::new(None), filter),
+        "plain" => rdb::parse(reader, rdb::formatter::Plain::new(None), filter),
+        "nil" => rdb::parse(reader, rdb::formatter::Nil::new(None), filter),
+        "protocol" => rdb::parse(reader, rdb::formatter::Protocol::new(None), filter),
         f => {
             println!("Unknown format: {}\n", f);
             std::process::exit(1);

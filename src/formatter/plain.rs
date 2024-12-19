@@ -13,10 +13,17 @@ pub struct Plain {
 }
 
 impl Plain {
-    pub fn new() -> Plain {
-        let out = Box::new(io::stdout());
+    pub fn new(file_path: Option<&str>) -> Plain {
+        let out: Box<dyn Write> = match file_path {
+            Some(path) => match std::fs::File::create(path) {
+                Ok(file) => Box::new(file),
+                Err(_) => Box::new(io::stdout()),
+            },
+            None => Box::new(io::stdout()),
+        };
+
         Plain {
-            out: out,
+            out,
             dbnum: 0,
             index: 0,
         }
