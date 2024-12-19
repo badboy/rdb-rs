@@ -80,7 +80,7 @@ extern crate rustc_serialize as serialize;
 use std::io::Read;
 
 #[doc(hidden)]
-pub use types::{/* error and result types */ RdbError, RdbOk, RdbResult, Type, ZiplistEntry};
+pub use types::{/* error and result types */ RdbError, RdbOk, RdbResult, Type};
 
 pub use parser::RdbParser;
 

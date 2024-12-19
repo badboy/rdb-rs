@@ -1,5 +1,4 @@
 #![allow(unused_must_use)]
-
 use super::write_str;
 use crate::formatter::Formatter;
 use crate::types::EncodingType;
@@ -32,8 +31,15 @@ impl JSON {
 }
 
 fn encode_to_ascii(value: &[u8]) -> String {
-    let s = unsafe { str::from_utf8_unchecked(value) };
-    json::encode(&s).unwrap()
+    match str::from_utf8(value) {
+        Ok(s) => json::encode(&s).unwrap(),
+        Err(_) => {
+            let s: String = value.iter()
+                .map(|&b| if b < 128 { b as char } else { '\u{FFFD}' })
+                .collect();
+            json::encode(&s).unwrap()
+        }
+    }
 }
 
 impl JSON {

@@ -2,12 +2,6 @@ use std::io::Error as IoError;
 
 use crate::constants::encoding_type;
 
-#[derive(Debug, Clone)]
-pub enum ZiplistEntry {
-    String(Vec<u8>),
-    Number(i64),
-}
-
 pub type RdbError = IoError;
 
 pub type RdbResult<T> = Result<T, RdbError>;

@@ -34,6 +34,9 @@ for dump in $(find "$DUMP_DIRECTORY" -type f -name "*.rdb"); do
 
   if [ $? -ne 0 ]; then
     echo "Failure with '$file'"
+    echo "Differences (with hidden characters shown):"
+    diff <($BIN --format json $dump 2>/dev/null | xxd) \
+         <(cat $DUMP_DIRECTORY/json/$json | xxd)
     failure=1
   fi
 done

@@ -2,18 +2,15 @@ use byteorder::{BigEndian, LittleEndian, ReadBytesExt};
 use lzf;
 use std::io::Error as IoError;
 use std::io::ErrorKind as IoErrorKind;
-use std::io::Result as IoResult;
 use std::io::Read;
+use std::io::Result as IoResult;
 use std::str;
-
 
 #[doc(hidden)]
 use crate::constants::{constant, encoding, version};
 
 #[doc(hidden)]
-pub use crate::types::{
-    RdbOk, RdbResult
-};
+pub use crate::types::{RdbOk, RdbResult};
 
 #[inline]
 pub fn other_error(desc: &'static str) -> IoError {
@@ -120,14 +117,6 @@ pub fn read_blob<R: Read>(input: &mut R) -> RdbResult<Vec<u8>> {
     } else {
         read_exact(input, length as usize)
     }
-}
-
-pub fn read_ziplist_metadata<T: Read>(input: &mut T) -> RdbResult<(u32, u32, u16)> {
-    let zlbytes = input.read_u32::<LittleEndian>()?;
-    let zltail = input.read_u32::<LittleEndian>()?;
-    let zllen = input.read_u16::<LittleEndian>()?;
-
-    Ok((zlbytes, zltail, zllen))
 }
 
 pub fn int_to_vec(number: i32) -> Vec<u8> {

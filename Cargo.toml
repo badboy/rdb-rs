@@ -36,3 +36,6 @@ clap = { version = "4.4", features = ["derive"] }
 
 [dev-dependencies]
 rstest = "0.23.0"
+
+[features]
+integration_tests = []
