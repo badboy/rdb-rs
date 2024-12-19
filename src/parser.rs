@@ -204,7 +204,20 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
                         &auxkey,
                         &auxval);
                 },
+                op_code::MODULE_AUX => {
+                    // TODO: Implement module auxiliary data parsing
+                    // Parse the module-specific data if a handler is registered.
+                    // For now, skip the data.
+                    try!(self.skip_blob()); // Skip module auxiliary data blob
+                },
+                op_code::IDLE => {
+                    let _idle_time = read_length(&mut self.input)?;
+                },
+                op_code::FREQ => {
+                    let _freq = self.input.read_u8()?;
+                },
                 _ => {
+                    println!("Next op: {}", next_op);
                     if self.filter.matches_db(last_database) {
                         let key = try!(read_blob(&mut self.input));
 
@@ -632,6 +645,30 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
             },
             encoding_type::LIST_QUICKLIST => {
                 try!(self.read_quicklist(key))
+            },
+            encoding_type::ZSET_2 => {
+                try!(self.read_zset_2(key));
+            },
+            encoding_type::LIST_QUICKLIST_2 => {
+                try!(self.read_quicklist_2(key));
+            },
+            encoding_type::STREAM_LIST_PACKS => {
+                try!(self.read_stream_list_packs(key, 1));
+            },
+            encoding_type::STREAM_LIST_PACKS_2 => {
+                try!(self.read_stream_list_packs(key, 2));
+            },
+            encoding_type::STREAM_LIST_PACKS_3 => {
+                try!(self.read_stream_list_packs(key, 3));
+            },
+            encoding_type::HASH_LIST_PACK => {
+                try!(self.read_hash_list_pack(key));
+            },
+            encoding_type::ZSET_LIST_PACK => {
+                try!(self.read_zset_list_pack(key));
+            },
+            encoding_type::SET_LIST_PACK => {
+                try!(self.read_set_list_pack(key));
             },
             _ => { panic!("Value Type not implemented: {}", value_type) }
         };
