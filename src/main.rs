@@ -1,122 +1,102 @@
-extern crate rdb;
-extern crate getopts;
-extern crate regex;
-use std::env;
-use std::io::{BufReader,Write};
-use std::fs::File;
-use std::path::Path;
-use getopts::Options;
+use clap::Parser;
 use regex::Regex;
+use std::fs::File;
+use std::io::{BufReader, Write};
+use std::path::PathBuf;
 
-fn print_usage(program: &str, opts: Options) {
-    let brief = format!("Usage: {} [options] dump.rdb", program);
-    print!("{}", opts.usage(&brief));
+#[derive(Parser)]
+#[command(name = "rdb")]
+#[command(override_usage = "rdb [options] dump.rdb")]
+struct Cli {
+    /// Path to the RDB dump file
+    dump_file: PathBuf,
 
+    /// Format to output. Valid: json, plain, nil, protocol
+    #[arg(short, long, value_name = "FORMAT")]
+    format: Option<String>,
+
+    /// Keys to show. Can be a regular expression
+    #[arg(short, long, value_name = "KEYS")]
+    keys: Option<String>,
+
+    /// Database to show. Can be specified multiple times
+    #[arg(short = 'd', long = "databases", value_name = "DB")]
+    databases: Vec<u32>,
+
+    /// Type to show. Can be specified multiple times
+    #[arg(short = 't', long = "type", value_name = "TYPE")]
+    type_: Vec<String>,
+}
+
+fn parse_type(type_str: &str) -> Option<rdb::Type> {
+    match type_str {
+        "string" => Some(rdb::Type::String),
+        "list" => Some(rdb::Type::List),
+        "set" => Some(rdb::Type::Set),
+        "sortedset" | "sorted-set" | "sorted_set" => Some(rdb::Type::SortedSet),
+        "hash" => Some(rdb::Type::Hash),
+        _ => None,
+    }
 }
 
 pub fn main() {
-    let mut args = env::args();
-    let program = args.next().unwrap();
-    let mut opts = Options::new();
+    let cli = Cli::parse();
+    let mut filter = rdb::filter::Simple::new();
 
-    opts.optopt("f", "format", "Format to output. Valid: json, plain, nil, protocol", "FORMAT");
-    opts.optopt("k", "keys", "Keys to show. Can be a regular expression", "KEYS");
-    opts.optmulti("d", "databases", "Database to show. Can be specified multiple times", "DB");
-    opts.optmulti("t", "type", "Type to show. Can be specified multiple times", "TYPE");
-    opts.optflag("h", "help", "print this help menu");
+    // Add databases to filter
+    for db in cli.databases {
+        filter.add_database(db);
+    }
 
+    // Add types to filter
+    for t in &cli.type_ {
+        match parse_type(t) {
+            Some(typ) => filter.add_type(typ),
+            None => {
+                println!("Unknown type: {}\n", t);
+                std::process::exit(1);
+            }
+        }
+    }
 
-    let matches = match opts.parse(args) {
-        Ok(m) => { m  }
-        Err(e) => {
-            println!("{}\n", e);
-            print_usage(&program, opts);
-            return;
+    // Add key pattern to filter if specified
+    if let Some(k) = cli.keys {
+        match Regex::new(&k) {
+            Ok(re) => filter.add_keys(re),
+            Err(err) => {
+                println!("Incorrect regexp: {:?}\n", err);
+                std::process::exit(1);
+            }
+        }
+    }
+
+    // Open and read the dump file
+    let file = match File::open(&cli.dump_file) {
+        Ok(f) => f,
+        Err(err) => {
+            println!("Failed to open file: {:?}\n", err);
+            std::process::exit(1);
+        }
+    };
+    let reader = BufReader::new(file);
+
+    // Parse with the specified formatter
+    let res = match cli.format.as_deref().unwrap_or("json") {
+        "json" => rdb::parse(reader, rdb::formatter::JSON::new(), filter),
+        "plain" => rdb::parse(reader, rdb::formatter::Plain::new(), filter),
+        "nil" => rdb::parse(reader, rdb::formatter::Nil::new(), filter),
+        "protocol" => rdb::parse(reader, rdb::formatter::Protocol::new(), filter),
+        f => {
+            println!("Unknown format: {}\n", f);
+            std::process::exit(1);
         }
     };
 
-    if matches.opt_present("h") {
-         print_usage(&program, opts);
-         return;
-    }
-
-    let mut filter = rdb::filter::Simple::new();
-
-    for db in &matches.opt_strs("d") {
-        filter.add_database(db.parse().unwrap());
-    }
-
-    for t in &matches.opt_strs("t") {
-        let typ = match &t[..] {
-            "string" => rdb::Type::String,
-            "list" => rdb::Type::List,
-            "set" => rdb::Type::Set,
-            "sortedset" | "sorted-set" | "sorted_set" => rdb::Type::SortedSet,
-            "hash" => rdb::Type::Hash,
-            _ => {
-                println!("Unknown type: {}\n", t);
-                print_usage(&program, opts);
-                return;
-            }
-        };
-        filter.add_type(typ);
-    }
-
-    if let Some(k) = matches.opt_str("k") {
-        let re = match Regex::new(&k) {
-            Ok(re) => re,
-            Err(err) => {
-                println!("Incorrect regexp: {:?}\n", err);
-                print_usage(&program, opts);
-                return;
-            }
-        };
-        filter.add_keys(re);
-    }
-
-    if matches.free.is_empty() {
-        print_usage(&program, opts);
-        return;
-    }
-
-    let path = matches.free[0].clone();
-    let file = File::open(&Path::new(&*path)).unwrap();
-    let reader = BufReader::new(file);
-
-    let mut res = Ok(());
-
-    if let Some(f) = matches.opt_str("f") {
-        match &f[..] {
-            "json" => {
-                res = rdb::parse(reader, rdb::formatter::JSON::new(), filter);
-            },
-            "plain" => {
-                res = rdb::parse(reader, rdb::formatter::Plain::new(), filter);
-            },
-            "nil" => {
-                res = rdb::parse(reader, rdb::formatter::Nil::new(), filter);
-            },
-            "protocol" => {
-                res = rdb::parse(reader, rdb::formatter::Protocol::new(), filter);
-
-            },
-            _ => {
-                println!("Unknown format: {}\n", f);
-                print_usage(&program, opts);
-            }
-        }
-    } else {
-        res = rdb::parse(reader, rdb::formatter::JSON::new(), filter);
-    }
-
-    match res {
-        Ok(()) => {},
-        Err(e) => {
-            println!("");
-            let mut stderr = std::io::stderr();
-
-            let out = format!("Parsing failed: {}\n", e);
-            stderr.write(out.as_bytes()).unwrap();
-        }
+    // Handle parsing errors
+    if let Err(e) = res {
+        println!("");
+        let mut stderr = std::io::stderr();
+        let out = format!("Parsing failed: {}\n", e);
+        stderr.write(out.as_bytes()).unwrap();
     }
 }

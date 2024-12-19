@@ -1,21 +1,25 @@
 #![allow(unused_must_use)]
-use formatter::Formatter;
+use super::write_str;
+use crate::formatter::Formatter;
+use crate::types::EncodingType;
+use serialize::hex::ToHex;
 use std::io;
 use std::io::Write;
-use serialize::hex::ToHex;
-use types::EncodingType;
-use super::write_str;
 
 pub struct Plain {
-    out: Box<Write+'static>,
+    out: Box<dyn Write + 'static>,
     dbnum: u32,
-    index: u32
+    index: u32,
 }
 
 impl Plain {
     pub fn new() -> Plain {
         let out = Box::new(io::stdout());
-        Plain { out: out, dbnum: 0, index: 0 }
+        Plain {
+            out: out,
+            dbnum: 0,
+            index: 0,
+        }
     }
 
     fn write_line_start(&mut self) {
@@ -76,8 +80,7 @@ impl Formatter for Plain {
         self.out.flush();
     }
 
-    fn start_list(&mut self, _key: &[u8], _length: u32,
-                  _expiry: Option<u64>, _info: EncodingType) {
+    fn start_list(&mut self, _key: &[u8], _length: u32, _expiry: Option<u64>, _info: EncodingType) {
         self.index = 0;
     }
     fn list_element(&mut self, key: &[u8], value: &[u8]) {
@@ -92,13 +95,17 @@ impl Formatter for Plain {
         self.index += 1;
     }
 
-    fn start_sorted_set(&mut self, _key: &[u8], _length: u32,
-                        _expiry: Option<u64>, _info: EncodingType) {
+    fn start_sorted_set(
+        &mut self,
+        _key: &[u8],
+        _length: u32,
+        _expiry: Option<u64>,
+        _info: EncodingType,
+    ) {
         self.index = 0;
     }
 
-    fn sorted_set_element(&mut self, key: &[u8],
-                          score: f64, member: &[u8]) {
+    fn sorted_set_element(&mut self, key: &[u8], score: f64, member: &[u8]) {
         self.write_line_start();
 
         self.out.write_all(key);

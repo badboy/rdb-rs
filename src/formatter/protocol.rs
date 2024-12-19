@@ -1,20 +1,22 @@
 #![allow(unused_must_use)]
-
-use formatter::Formatter;
+use super::write_str;
+use crate::formatter::Formatter;
+use crate::types::EncodingType;
 use std::io;
 use std::io::Write;
-use types::EncodingType;
-use super::write_str;
 
 pub struct Protocol {
-    out: Box<Write+'static>,
-    last_expiry: Option<u64>
+    out: Box<dyn Write + 'static>,
+    last_expiry: Option<u64>,
 }
 
 impl Protocol {
     pub fn new() -> Protocol {
         let out = Box::new(io::stdout());
-        Protocol { out: out, last_expiry: None }
+        Protocol {
+            out: out,
+            last_expiry: None,
+        }
     }
 }
 
@@ -46,11 +48,9 @@ impl Protocol {
 }
 
 impl Formatter for Protocol {
-    fn start_rdb(&mut self) {
-    }
+    fn start_rdb(&mut self) {}
 
-    fn end_rdb(&mut self) {
-    }
+    fn end_rdb(&mut self) {}
 
     fn start_database(&mut self, db_number: u32) {
         let db = db_number.to_string();
@@ -63,8 +63,7 @@ impl Formatter for Protocol {
         self.post_expire(key);
     }
 
-    fn start_hash(&mut self, _key: &[u8], _length: u32,
-                  expiry: Option<u64>, _info: EncodingType) {
+    fn start_hash(&mut self, _key: &[u8], _length: u32, expiry: Option<u64>, _info: EncodingType) {
         self.pre_expire(expiry);
     }
     fn end_hash(&mut self, key: &[u8]) {
@@ -74,9 +73,13 @@ impl Formatter for Protocol {
         self.emit(vec!["HSET".as_bytes(), key, field, value]);
     }
 
-
-    fn start_set(&mut self, _key: &[u8], _cardinality: u32,
-                 expiry: Option<u64>, _info: EncodingType) {
+    fn start_set(
+        &mut self,
+        _key: &[u8],
+        _cardinality: u32,
+        expiry: Option<u64>,
+        _info: EncodingType,
+    ) {
         self.pre_expire(expiry);
     }
     fn end_set(&mut self, key: &[u8]) {
@@ -86,9 +89,7 @@ impl Formatter for Protocol {
         self.emit(vec!["SADD".as_bytes(), key, member]);
     }
 
-
-    fn start_list(&mut self, _key: &[u8], _length: u32,
-                  expiry: Option<u64>, _info: EncodingType) {
+    fn start_list(&mut self, _key: &[u8], _length: u32, expiry: Option<u64>, _info: EncodingType) {
         self.pre_expire(expiry);
     }
     fn end_list(&mut self, key: &[u8]) {
@@ -98,15 +99,19 @@ impl Formatter for Protocol {
         self.emit(vec!["RPUSH".as_bytes(), key, value]);
     }
 
-    fn start_sorted_set(&mut self, _key: &[u8], _length: u32,
-                        expiry: Option<u64>, _info: EncodingType) {
+    fn start_sorted_set(
+        &mut self,
+        _key: &[u8],
+        _length: u32,
+        expiry: Option<u64>,
+        _info: EncodingType,
+    ) {
         self.pre_expire(expiry);
     }
     fn end_sorted_set(&mut self, key: &[u8]) {
         self.post_expire(key);
     }
-    fn sorted_set_element(&mut self, key: &[u8],
-                          score: f64, member: &[u8]) {
+    fn sorted_set_element(&mut self, key: &[u8], score: f64, member: &[u8]) {
         let score = score.to_string();
         self.emit(vec!["ZADD".as_bytes(), key, score.as_bytes(), member]);
     }

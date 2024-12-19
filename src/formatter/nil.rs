@@ -1,4 +1,4 @@
-use formatter::Formatter;
+use crate::formatter::Formatter;
 
 pub struct Nil;
 
