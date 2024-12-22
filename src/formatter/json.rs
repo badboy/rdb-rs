@@ -43,9 +43,15 @@ fn encode_to_ascii(value: &[u8]) -> String {
         Err(_) => {
             let s: String = value
                 .iter()
-                .map(|&b| if b < 128 { b as char } else { '\u{FFFD}' })
+                .map(|&b| {
+                    if b >= 32 && b < 127 { // ASCII printable characters
+                        (b as char).to_string()
+                    } else {
+                        format!("\\u{:04x}", b as u16)
+                    }
+                })
                 .collect();
-            json::encode(&s).unwrap()
+            format!("\"{}\"", s)
         }
     }
 }
