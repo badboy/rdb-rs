@@ -195,9 +195,12 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
             encoding_type::STREAM_LIST_PACKS_3 => {
                 todo!(); //self.read_stream_list_packs(key, 3)?;
             }
-            encoding_type::HASH_LIST_PACK => {
-                todo!(); //self.read_hash_list_pack(key)?;
-            }
+            encoding_type::HASH_LIST_PACK => hash::read_hash_list_pack(
+                &mut self.input,
+                &mut self.formatter,
+                key,
+                self.last_expiretime,
+            )?,
             encoding_type::ZSET_LIST_PACK => {
                 todo!(); //self.read_zset_list_pack(key)?;
             }

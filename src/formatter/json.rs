@@ -44,7 +44,8 @@ fn encode_to_ascii(value: &[u8]) -> String {
             let s: String = value
                 .iter()
                 .map(|&b| {
-                    if b >= 32 && b < 127 { // ASCII printable characters
+                    if b >= 32 && b < 127 {
+                        // ASCII printable characters
                         (b as char).to_string()
                     } else {
                         format!("\\u{:04x}", b as u16)
