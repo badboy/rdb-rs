@@ -1,4 +1,5 @@
 use crate::formatter::Formatter;
+use crate::types::RdbValue;
 use std::io;
 use std::io::Write;
 pub struct Nil {
@@ -18,4 +19,8 @@ impl Nil {
     }
 }
 
-impl Formatter for Nil {}
+impl Formatter for Nil {
+    fn format(&mut self, _value: &RdbValue) -> std::io::Result<()> {
+        Ok(())
+    }
+}

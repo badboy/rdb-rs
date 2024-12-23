@@ -1,14 +1,13 @@
 use super::common::utils::{
-    read_blob, read_length, read_length_with_encoding, verify_magic, verify_version,
+    other_error, read_blob, read_length, read_length_with_encoding, verify_magic, verify_version,
 };
 use super::{hash, list, set};
 use byteorder::{BigEndian, LittleEndian, ReadBytesExt};
 use std::io::Read;
 
-use super::value::RdbValue;
 use crate::constants::{encoding, encoding_type, op_code};
 use crate::filter::Filter;
-use crate::types::RdbResult;
+use crate::types::{RdbResult, RdbValue};
 
 pub struct RdbParser<R: Read, L: Filter> {
     input: R,
@@ -92,8 +91,10 @@ impl<R: Read, L: Filter> RdbParser<R, L> {
             encoding_type::SET_LIST_PACK => {
                 todo!("read_set_list_pack not implemented");
             }
-            _ => {
-                panic!("Value Type not implemented: {}", value_type)
+            unknown_type => {
+                self.skip_object(unknown_type)?;
+                self.next()
+                    .ok_or_else(|| other_error("No value after skip"))?
             }
         }
     }
@@ -157,107 +158,94 @@ impl<R: Read, L: Filter> RdbParser<R, L> {
         self.skip_object(enc_type)?;
         Ok(())
     }
+
+    fn read_value<T, F>(&mut self, f: F) -> Option<RdbValue>
+    where
+        F: FnOnce(&mut Self) -> RdbResult<T>,
+        T: Into<RdbValue>,
+    {
+        f(self).ok().map(Into::into)
+    }
 }
 
 impl<R: Read, L: Filter> Iterator for RdbParser<R, L> {
     type Item = RdbResult<RdbValue>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let next_op = match self.input.read_u8() {
-            Ok(op) => op,
-            Err(_) => return None,
-        };
+        let result = (|| {
+            let next_op = match self.input.read_u8() {
+                Ok(op) => op,
+                Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
+                    return Ok(RdbValue::Checksum(vec![]))
+                }
+                Err(e) => return Err(e.into()),
+            };
 
-        let result = match next_op {
-            op_code::SELECTDB => match read_length(&mut self.input) {
-                Ok(db_index) => {
-                    self.current_database = db_index;
-                    Some(Ok(RdbValue::SelectDb(db_index)))
+            match next_op {
+                op_code::SELECTDB => {
+                    self.current_database = read_length(&mut self.input)?;
+                    Ok(RdbValue::SelectDb(self.current_database))
                 }
-                Err(e) => Some(Err(e)),
-            },
-            op_code::EOF => {
-                let mut checksum = Vec::new();
-                match self.input.read_to_end(&mut checksum) {
-                    Ok(_) => {
-                        if !checksum.is_empty() {
-                            Some(Ok(RdbValue::Checksum(checksum)))
-                        } else {
-                            None
-                        }
-                    }
-                    Err(e) => Some(Err(e)),
+                op_code::EOF => {
+                    let mut checksum = Vec::new();
+                    self.input.read_to_end(&mut checksum)?;
+                    Ok(RdbValue::Checksum(checksum))
                 }
-            }
-            op_code::EXPIRETIME_MS => match self.input.read_u64::<LittleEndian>() {
-                Ok(expiretime_ms) => {
-                    self.last_expiretime = Some(expiretime_ms);
+                op_code::EXPIRETIME_MS => {
+                    self.last_expiretime = Some(self.input.read_u64::<LittleEndian>()?);
                     self.next()
+                        .ok_or_else(|| other_error("No value after expiry"))?
                 }
-                Err(e) => Some(Err(e)),
-            },
-            op_code::EXPIRETIME => match self.input.read_u32::<BigEndian>() {
-                Ok(expiretime) => {
-                    self.last_expiretime = Some(expiretime as u64 * 1000);
+                op_code::EXPIRETIME => {
+                    self.last_expiretime = Some(self.input.read_u32::<BigEndian>()? as u64 * 1000);
                     self.next()
+                        .ok_or_else(|| other_error("No value after expiry"))?
                 }
-                Err(e) => Some(Err(e)),
-            },
-            op_code::RESIZEDB => {
-                match (read_length(&mut self.input), read_length(&mut self.input)) {
-                    (Ok(db_size), Ok(expires_size)) => Some(Ok(RdbValue::ResizeDb {
+                op_code::RESIZEDB => {
+                    let db_size = read_length(&mut self.input)?;
+                    let expires_size = read_length(&mut self.input)?;
+                    Ok(RdbValue::ResizeDb {
                         db_size,
                         expires_size,
-                    })),
-                    (Err(e), _) | (_, Err(e)) => Some(Err(e)),
+                    })
                 }
-            }
-            op_code::AUX => match (read_blob(&mut self.input), read_blob(&mut self.input)) {
-                (Ok(auxkey), Ok(auxval)) => Some(Ok(RdbValue::AuxField {
-                    key: auxkey,
-                    value: auxval,
-                })),
-                (Err(e), _) | (_, Err(e)) => Some(Err(e)),
-            },
-            op_code::MODULE_AUX => match self.skip_blob() {
-                Ok(_) => self.next(),
-                Err(e) => Some(Err(e)),
-            },
-            op_code::IDLE => match read_length(&mut self.input) {
-                Ok(_idle_time) => self.next(),
-                Err(e) => Some(Err(e)),
-            },
-            op_code::FREQ => match self.input.read_u8() {
-                Ok(_freq) => self.next(),
-                Err(e) => Some(Err(e)),
-            },
-            _ => {
-                if self.filter.matches_db(self.current_database) {
-                    match read_blob(&mut self.input) {
-                        Ok(key) => {
-                            if self.filter.matches_type(next_op) && self.filter.matches_key(&key) {
-                                match self.read_type(&key, next_op) {
-                                    Ok(value) => Some(Ok(value)),
-                                    Err(e) => Some(Err(e)),
-                                }
-                            } else {
-                                match self.skip_object(next_op) {
-                                    Ok(_) => self.next(),
-                                    Err(e) => Some(Err(e)),
-                                }
-                            }
-                        }
-                        Err(e) => Some(Err(e)),
-                    }
-                } else {
-                    match self.skip_key_and_object(next_op) {
-                        Ok(_) => self.next(),
-                        Err(e) => Some(Err(e)),
-                    }
+                op_code::AUX => {
+                    let key = read_blob(&mut self.input)?;
+                    let value = read_blob(&mut self.input)?;
+                    Ok(RdbValue::AuxField { key, value })
                 }
-            }
-        };
+                op_code::MODULE_AUX => {
+                    self.skip_blob()?;
+                    self.next()
+                        .ok_or_else(|| other_error("No value after module aux"))?
+                }
+                op_code::IDLE => {
+                    let _idle_time = read_length(&mut self.input)?;
+                    self.next()
+                        .ok_or_else(|| other_error("No value after idle"))?
+                }
+                op_code::FREQ => {
+                    let _freq = self.input.read_u8()?;
+                    self.next()
+                        .ok_or_else(|| other_error("No value after freq"))?
+                }
+                value_type => {
+                    if !self.filter.matches_db(self.current_database) {
+                        self.skip_key_and_object(value_type)?;
+                        return Ok(RdbValue::SelectDb(self.current_database));
+                    }
 
-        result
+                    let key = read_blob(&mut self.input)?;
+                    if !self.filter.matches_type(value_type) || !self.filter.matches_key(&key) {
+                        self.skip_object(value_type)?;
+                        return Ok(RdbValue::SelectDb(self.current_database));
+                    }
+
+                    self.read_type(&key, value_type)
+                }
+            }
+        })();
+
+        Some(result)
     }
 }

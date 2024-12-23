@@ -1,7 +1,7 @@
 #![allow(unused_must_use)]
 use super::write_str;
 use crate::formatter::Formatter;
-use crate::types::EncodingType;
+use crate::types::{EncodingType, RdbValue};
 use serialize::hex::ToHex;
 use std::io;
 use std::io::Write;
@@ -32,9 +32,7 @@ impl Plain {
     fn write_line_start(&mut self) {
         write_str(&mut self.out, &format!("db={} ", self.dbnum));
     }
-}
 
-impl Formatter for Plain {
     fn checksum(&mut self, checksum: &[u8]) {
         write_str(&mut self.out, "checksum ");
         write_str(&mut self.out, &checksum.to_hex());
@@ -123,5 +121,13 @@ impl Formatter for Plain {
         write_str(&mut self.out, "}\n");
         self.out.flush();
         self.index += 1;
+    }
+}
+
+impl Formatter for Plain {
+    fn format(&mut self, value: &RdbValue) -> std::io::Result<()> {
+        match value {
+            _ => Ok(()),
+        }
     }
 }

@@ -1,7 +1,7 @@
 #![allow(unused_must_use)]
 use super::write_str;
 use crate::formatter::Formatter;
-use crate::types::EncodingType;
+use crate::types::{EncodingType, RdbValue};
 use std::io;
 use std::io::Write;
 
@@ -52,9 +52,7 @@ impl Protocol {
             self.last_expiry = None;
         }
     }
-}
 
-impl Formatter for Protocol {
     fn start_rdb(&mut self) {}
 
     fn end_rdb(&mut self) {}
@@ -121,5 +119,13 @@ impl Formatter for Protocol {
     fn sorted_set_element(&mut self, key: &[u8], score: f64, member: &[u8]) {
         let score = score.to_string();
         self.emit(vec!["ZADD".as_bytes(), key, score.as_bytes(), member]);
+    }
+}
+
+impl Formatter for Protocol {
+    fn format(&mut self, value: &RdbValue) -> std::io::Result<()> {
+        match value {
+            _ => Ok(()),
+        }
     }
 }

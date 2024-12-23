@@ -1,7 +1,6 @@
 use super::common::utils::{other_error, read_blob, read_exact, read_length, read_sequence};
 use super::common::{read_ziplist_entry_string, read_ziplist_metadata};
-use super::value::RdbValue;
-use crate::types::RdbResult;
+use crate::types::{RdbResult, RdbValue};
 use byteorder::{LittleEndian, ReadBytesExt};
 use std::collections::HashSet;
 use std::io::{Cursor, Read};

@@ -1,7 +1,7 @@
 #![allow(unused_must_use)]
 use super::write_str;
 use crate::formatter::Formatter;
-use crate::types::EncodingType;
+use crate::types::{EncodingType, RdbValue};
 use serialize::json;
 use std::io;
 use std::io::Write;
@@ -83,9 +83,7 @@ impl JSON {
     fn write_value(&mut self, value: &[u8]) {
         self.out.write_all(encode_to_ascii(value).as_bytes());
     }
-}
 
-impl Formatter for JSON {
     fn start_rdb(&mut self) {
         write_str(&mut self.out, "[");
     }
@@ -197,5 +195,83 @@ impl Formatter for JSON {
         self.write_key(member);
         write_str(&mut self.out, ":");
         self.write_value(score.to_string().as_bytes());
+    }
+}
+
+impl Formatter for JSON {
+    fn format(&mut self, value: &RdbValue) -> std::io::Result<()> {
+        match value {
+            RdbValue::Set {
+                key,
+                members,
+                expiry,
+            } => {
+                self.start_key(members.len() as u32);
+                self.write_key(key);
+                write_str(&mut self.out, ":");
+                self.write_value(&members.iter().next().unwrap());
+                Ok(())
+            }
+            RdbValue::Hash {
+                key,
+                values,
+                expiry,
+            } => {
+                self.start_key(values.len() as u32);
+                self.write_key(key);
+                write_str(&mut self.out, ":");
+                let (key, value) = values.iter().next().unwrap();
+                self.write_value(value);
+                Ok(())
+            }
+            RdbValue::List {
+                key,
+                values,
+                expiry,
+            } => {
+                self.start_key(values.len() as u32);
+                self.write_key(key);
+                write_str(&mut self.out, ":");
+                self.write_value(&values.iter().next().unwrap());
+                Ok(())
+            }
+            RdbValue::SortedSet {
+                key,
+                values,
+                expiry,
+            } => {
+                self.start_key(values.len() as u32);
+                self.write_key(key);
+                write_str(&mut self.out, ":");
+                let (_, member) = values.iter().next().unwrap();
+                self.write_value(member);
+                Ok(())
+            }
+            RdbValue::String { key, value, expiry } => {
+                self.start_key(0);
+                self.write_key(key);
+                write_str(&mut self.out, ":");
+                self.write_value(value);
+                Ok(())
+            }
+            RdbValue::SelectDb(db_number) => {
+                self.start_database(*db_number);
+                Ok(())
+            }
+            RdbValue::ResizeDb {
+                db_size,
+                expires_size,
+            } => {
+                self.start_database(*db_size);
+                Ok(())
+            }
+            RdbValue::AuxField { key, value } => {
+                self.write_key(key);
+                write_str(&mut self.out, ":");
+                self.write_value(value);
+                Ok(())
+            }
+            _ => Ok(()),
+        }
     }
 }
