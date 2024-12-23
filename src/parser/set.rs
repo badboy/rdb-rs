@@ -1,30 +1,35 @@
-use super::common::utils::{other_error, read_blob, read_exact, read_length};
+use super::common::utils::{other_error, read_blob, read_exact, read_length, read_sequence};
 use super::common::{read_ziplist_entry_string, read_ziplist_metadata};
-use crate::formatter::Formatter;
-use crate::types::{EncodingType, RdbOk};
+use super::value::RdbValue;
+use crate::types::RdbResult;
 use byteorder::{LittleEndian, ReadBytesExt};
+use std::collections::HashSet;
 use std::io::{Cursor, Read};
 use std::str;
 
-pub fn read_set_intset<R: Read, F: Formatter>(
+pub fn read_set<R: Read>(input: &mut R, key: &[u8], expiry: Option<u64>) -> RdbResult<RdbValue> {
+    let values = read_sequence(input, |input| read_blob(input))?;
+    let members = values.into_iter().collect();
+
+    Ok(RdbValue::Set {
+        key: key.to_vec(),
+        members,
+        expiry,
+    })
+}
+
+pub fn read_set_intset<R: Read>(
     input: &mut R,
-    formatter: &mut F,
     key: &[u8],
-    last_expiretime: Option<u64>,
-) -> RdbOk {
+    expiry: Option<u64>,
+) -> RdbResult<RdbValue> {
     let intset = read_blob(input)?;
-    let raw_length = intset.len() as u64;
 
     let mut reader = Cursor::new(intset);
     let byte_size = reader.read_u32::<LittleEndian>()?;
     let intset_length = reader.read_u32::<LittleEndian>()?;
 
-    formatter.start_set(
-        key,
-        intset_length,
-        last_expiretime,
-        EncodingType::Intset(raw_length),
-    );
+    let mut members = HashSet::new();
 
     for _ in 0..intset_length {
         let val = match byte_size {
@@ -34,23 +39,23 @@ pub fn read_set_intset<R: Read, F: Formatter>(
             _ => panic!("unhandled byte size in intset: {}", byte_size),
         };
 
-        formatter.set_element(key, val.to_string().as_bytes());
+        members.insert(val.to_string().as_bytes().to_vec());
     }
 
-    formatter.end_set(key);
-
-    Ok(())
+    Ok(RdbValue::Set {
+        key: key.to_vec(),
+        members,
+        expiry,
+    })
 }
 
-pub fn read_sorted_set<R: Read, F: Formatter>(
+pub fn read_sorted_set<R: Read>(
     input: &mut R,
-    formatter: &mut F,
     key: &[u8],
-    last_expiretime: Option<u64>,
-) -> RdbOk {
+    expiry: Option<u64>,
+) -> RdbResult<RdbValue> {
     let mut set_items = read_length(input)?;
-
-    formatter.start_sorted_set(key, set_items, last_expiretime, EncodingType::Hashtable);
+    let mut values = Vec::with_capacity(set_items as usize);
 
     while set_items > 0 {
         let val = read_blob(input)?;
@@ -67,43 +72,35 @@ pub fn read_sorted_set<R: Read, F: Formatter>(
             }
         };
 
-        formatter.sorted_set_element(key, score, &val);
-
+        values.push((score, val));
         set_items -= 1;
     }
 
-    formatter.end_sorted_set(key);
-
-    Ok(())
+    Ok(RdbValue::SortedSet {
+        key: key.to_vec(),
+        values,
+        expiry,
+    })
 }
 
-pub fn read_sortedset_ziplist<R: Read, F: Formatter>(
+pub fn read_sortedset_ziplist<R: Read>(
     input: &mut R,
-    formatter: &mut F,
     key: &[u8],
-    last_expiretime: Option<u64>,
-) -> RdbOk {
+    expiry: Option<u64>,
+) -> RdbResult<RdbValue> {
     let ziplist = read_blob(input)?;
-    let raw_length = ziplist.len() as u64;
-
     let mut reader = Cursor::new(ziplist);
     let (_zlbytes, _zltail, zllen) = read_ziplist_metadata(&mut reader)?;
 
-    formatter.start_sorted_set(
-        key,
-        zllen as u32,
-        last_expiretime,
-        EncodingType::Ziplist(raw_length),
-    );
-
     assert!(zllen % 2 == 0);
     let zllen = zllen / 2;
+    let mut values = Vec::with_capacity(zllen as usize);
 
     for _ in 0..zllen {
         let entry = read_ziplist_entry_string(&mut reader)?;
         let score = read_ziplist_entry_string(&mut reader)?;
         let score = str::from_utf8(&score).unwrap().parse::<f64>().unwrap();
-        formatter.sorted_set_element(key, score, &entry);
+        values.push((score, entry));
     }
 
     let last_byte = reader.read_u8()?;
@@ -111,7 +108,9 @@ pub fn read_sortedset_ziplist<R: Read, F: Formatter>(
         return Err(other_error("Invalid end byte of ziplist"));
     }
 
-    formatter.end_sorted_set(key);
-
-    Ok(())
+    Ok(RdbValue::SortedSet {
+        key: key.to_vec(),
+        values,
+        expiry,
+    })
 }

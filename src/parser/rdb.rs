@@ -5,214 +5,97 @@ use super::{hash, list, set};
 use byteorder::{BigEndian, LittleEndian, ReadBytesExt};
 use std::io::Read;
 
-use crate::filter::Filter;
-use crate::formatter::Formatter;
-
-#[doc(hidden)]
+use super::value::RdbValue;
 use crate::constants::{encoding, encoding_type, op_code};
+use crate::filter::Filter;
+use crate::types::RdbResult;
 
-#[doc(hidden)]
-pub use crate::types::{RdbOk, RdbResult, Type};
-
-pub struct RdbParser<R: Read, F: Formatter, L: Filter> {
+pub struct RdbParser<R: Read, L: Filter> {
     input: R,
-    formatter: F,
     filter: L,
     last_expiretime: Option<u64>,
+    current_database: u32,
 }
 
-impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
-    pub fn new(input: R, formatter: F, filter: L) -> RdbParser<R, F, L> {
+impl<R: Read, L: Filter> RdbParser<R, L> {
+    pub fn new(input: R, filter: L) -> RdbParser<R, L> {
         RdbParser {
-            input: input,
-            formatter: formatter,
-            filter: filter,
+            input,
+            filter,
             last_expiretime: None,
+            current_database: 0,
         }
     }
 
-    pub fn parse(&mut self) -> RdbOk {
+    /// Verifies the RDB file header (magic number and version).
+    /// This should be called before starting iteration.
+    pub fn verify_header(&mut self) -> RdbResult<()> {
         verify_magic(&mut self.input)?;
-        verify_version(&mut self.input)?;
-
-        self.formatter.start_rdb();
-
-        let mut last_database: u32 = 0;
-        loop {
-            let next_op = self.input.read_u8()?;
-
-            match next_op {
-                op_code::SELECTDB => {
-                    last_database = read_length(&mut self.input)?;
-                    if self.filter.matches_db(last_database) {
-                        self.formatter.start_database(last_database);
-                    }
-                }
-                op_code::EOF => {
-                    self.formatter.end_database(last_database);
-                    self.formatter.end_rdb();
-
-                    let mut checksum = Vec::new();
-                    let len = self.input.read_to_end(&mut checksum)?;
-                    if len > 0 {
-                        self.formatter.checksum(&checksum);
-                    }
-                    break;
-                }
-                op_code::EXPIRETIME_MS => {
-                    let expiretime_ms = self.input.read_u64::<LittleEndian>()?;
-                    self.last_expiretime = Some(expiretime_ms);
-                }
-                op_code::EXPIRETIME => {
-                    let expiretime = self.input.read_u32::<BigEndian>()?;
-                    self.last_expiretime = Some(expiretime as u64 * 1000);
-                }
-                op_code::RESIZEDB => {
-                    let db_size = read_length(&mut self.input)?;
-                    let expires_size = read_length(&mut self.input)?;
-
-                    self.formatter.resizedb(db_size, expires_size);
-                }
-                op_code::AUX => {
-                    let auxkey = read_blob(&mut self.input)?;
-                    let auxval = read_blob(&mut self.input)?;
-
-                    self.formatter.aux_field(&auxkey, &auxval);
-                }
-                op_code::MODULE_AUX => {
-                    // TODO: Implement module auxiliary data parsing
-                    // Parse the module-specific data if a handler is registered.
-                    // For now, skip the data.
-                    self.skip_blob()?; // Skip module auxiliary data blob
-                }
-                op_code::IDLE => {
-                    let _idle_time = read_length(&mut self.input)?;
-                }
-                op_code::FREQ => {
-                    let _freq = self.input.read_u8()?;
-                }
-                _ => {
-                    if self.filter.matches_db(last_database) {
-                        let key = read_blob(&mut self.input)?;
-
-                        if self.filter.matches_type(next_op) && self.filter.matches_key(&key) {
-                            self.read_type(&key, next_op)?;
-                        } else {
-                            self.skip_object(next_op)?;
-                        }
-                    } else {
-                        self.skip_key_and_object(next_op)?;
-                    }
-
-                    self.last_expiretime = None;
-                }
-            }
-        }
-
-        Ok(())
+        verify_version(&mut self.input)
     }
 
-    fn read_type(&mut self, key: &[u8], value_type: u8) -> RdbOk {
+    fn read_type(&mut self, key: &[u8], value_type: u8) -> RdbResult<RdbValue> {
         match value_type {
             encoding_type::STRING => {
                 let val = read_blob(&mut self.input)?;
-                self.formatter.set(key, &val, self.last_expiretime);
+                Ok(RdbValue::String {
+                    key: key.to_vec(),
+                    value: val,
+                    expiry: self.last_expiretime,
+                })
             }
-            encoding_type::LIST => list::read_linked_list(
-                &mut self.input,
-                &mut self.formatter,
-                key,
-                self.last_expiretime,
-                Type::List,
-            )?,
-            encoding_type::SET => list::read_linked_list(
-                &mut self.input,
-                &mut self.formatter,
-                key,
-                self.last_expiretime,
-                Type::Set,
-            )?,
-            encoding_type::ZSET => set::read_sorted_set(
-                &mut self.input,
-                &mut self.formatter,
-                key,
-                self.last_expiretime,
-            )?,
-            encoding_type::HASH => hash::read_hash(
-                &mut self.input,
-                &mut self.formatter,
-                key,
-                self.last_expiretime,
-            )?,
-            encoding_type::HASH_ZIPMAP => hash::read_hash_zipmap(
-                &mut self.input,
-                &mut self.formatter,
-                key,
-                self.last_expiretime,
-            )?,
-            encoding_type::LIST_ZIPLIST => list::read_list_ziplist(
-                &mut self.input,
-                &mut self.formatter,
-                key,
-                self.last_expiretime,
-            )?,
-            encoding_type::SET_INTSET => set::read_set_intset(
-                &mut self.input,
-                &mut self.formatter,
-                key,
-                self.last_expiretime,
-            )?,
-            encoding_type::ZSET_ZIPLIST => set::read_sortedset_ziplist(
-                &mut self.input,
-                &mut self.formatter,
-                key,
-                self.last_expiretime,
-            )?,
-            encoding_type::HASH_ZIPLIST => hash::read_hash_ziplist(
-                &mut self.input,
-                &mut self.formatter,
-                key,
-                self.last_expiretime,
-            )?,
-            encoding_type::LIST_QUICKLIST => list::read_quicklist(
-                &mut self.input,
-                &mut self.formatter,
-                key,
-                self.last_expiretime,
-            )?,
+            encoding_type::LIST => {
+                list::read_linked_list(&mut self.input, key, self.last_expiretime)
+            }
+            encoding_type::SET => set::read_set(&mut self.input, key, self.last_expiretime),
+            encoding_type::ZSET => set::read_sorted_set(&mut self.input, key, self.last_expiretime),
+            encoding_type::HASH => hash::read_hash(&mut self.input, key, self.last_expiretime),
+            encoding_type::HASH_ZIPMAP => {
+                hash::read_hash_zipmap(&mut self.input, key, self.last_expiretime)
+            }
+            encoding_type::LIST_ZIPLIST => {
+                list::read_list_ziplist(&mut self.input, key, self.last_expiretime)
+            }
+            encoding_type::SET_INTSET => {
+                set::read_set_intset(&mut self.input, key, self.last_expiretime)
+            }
+            encoding_type::ZSET_ZIPLIST => {
+                set::read_sortedset_ziplist(&mut self.input, key, self.last_expiretime)
+            }
+            encoding_type::HASH_ZIPLIST => {
+                hash::read_hash_ziplist(&mut self.input, key, self.last_expiretime)
+            }
+            encoding_type::LIST_QUICKLIST => {
+                list::read_quicklist(&mut self.input, key, self.last_expiretime)
+            }
+            encoding_type::HASH_LIST_PACK => {
+                hash::read_hash_list_pack(&mut self.input, key, self.last_expiretime)
+            }
             encoding_type::ZSET_2 => {
-                todo!(); //self.read_zset_2(key)?;
+                todo!("read_zset_2 not implemented");
             }
             encoding_type::LIST_QUICKLIST_2 => {
-                todo!(); //self.read_quicklist_2(key)?;
+                todo!("read_quicklist_2 not implemented");
             }
             encoding_type::STREAM_LIST_PACKS => {
-                todo!(); //self.read_stream_list_packs(key, 1)?;
+                todo!("read_stream_list_packs v1 not implemented");
             }
             encoding_type::STREAM_LIST_PACKS_2 => {
-                todo!(); //self.read_stream_list_packs(key, 2)?;
+                todo!("read_stream_list_packs v2 not implemented");
             }
             encoding_type::STREAM_LIST_PACKS_3 => {
-                todo!(); //self.read_stream_list_packs(key, 3)?;
+                todo!("read_stream_list_packs v3 not implemented");
             }
-            encoding_type::HASH_LIST_PACK => hash::read_hash_list_pack(
-                &mut self.input,
-                &mut self.formatter,
-                key,
-                self.last_expiretime,
-            )?,
             encoding_type::ZSET_LIST_PACK => {
-                todo!(); //self.read_zset_list_pack(key)?;
+                todo!("read_zset_list_pack not implemented");
             }
             encoding_type::SET_LIST_PACK => {
-                todo!(); //self.read_set_list_pack(key)?;
+                todo!("read_set_list_pack not implemented");
             }
             _ => {
                 panic!("Value Type not implemented: {}", value_type)
             }
-        };
-
-        Ok(())
+        }
     }
 
     fn skip(&mut self, skip_bytes: usize) -> RdbResult<()> {
@@ -273,5 +156,108 @@ impl<R: Read, F: Formatter, L: Filter> RdbParser<R, F, L> {
         self.skip_blob()?;
         self.skip_object(enc_type)?;
         Ok(())
+    }
+}
+
+impl<R: Read, L: Filter> Iterator for RdbParser<R, L> {
+    type Item = RdbResult<RdbValue>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let next_op = match self.input.read_u8() {
+            Ok(op) => op,
+            Err(_) => return None,
+        };
+
+        let result = match next_op {
+            op_code::SELECTDB => match read_length(&mut self.input) {
+                Ok(db_index) => {
+                    self.current_database = db_index;
+                    Some(Ok(RdbValue::SelectDb(db_index)))
+                }
+                Err(e) => Some(Err(e)),
+            },
+            op_code::EOF => {
+                let mut checksum = Vec::new();
+                match self.input.read_to_end(&mut checksum) {
+                    Ok(_) => {
+                        if !checksum.is_empty() {
+                            Some(Ok(RdbValue::Checksum(checksum)))
+                        } else {
+                            None
+                        }
+                    }
+                    Err(e) => Some(Err(e)),
+                }
+            }
+            op_code::EXPIRETIME_MS => match self.input.read_u64::<LittleEndian>() {
+                Ok(expiretime_ms) => {
+                    self.last_expiretime = Some(expiretime_ms);
+                    self.next()
+                }
+                Err(e) => Some(Err(e)),
+            },
+            op_code::EXPIRETIME => match self.input.read_u32::<BigEndian>() {
+                Ok(expiretime) => {
+                    self.last_expiretime = Some(expiretime as u64 * 1000);
+                    self.next()
+                }
+                Err(e) => Some(Err(e)),
+            },
+            op_code::RESIZEDB => {
+                match (read_length(&mut self.input), read_length(&mut self.input)) {
+                    (Ok(db_size), Ok(expires_size)) => Some(Ok(RdbValue::ResizeDb {
+                        db_size,
+                        expires_size,
+                    })),
+                    (Err(e), _) | (_, Err(e)) => Some(Err(e)),
+                }
+            }
+            op_code::AUX => match (read_blob(&mut self.input), read_blob(&mut self.input)) {
+                (Ok(auxkey), Ok(auxval)) => Some(Ok(RdbValue::AuxField {
+                    key: auxkey,
+                    value: auxval,
+                })),
+                (Err(e), _) | (_, Err(e)) => Some(Err(e)),
+            },
+            op_code::MODULE_AUX => match self.skip_blob() {
+                Ok(_) => self.next(),
+                Err(e) => Some(Err(e)),
+            },
+            op_code::IDLE => match read_length(&mut self.input) {
+                Ok(_idle_time) => self.next(),
+                Err(e) => Some(Err(e)),
+            },
+            op_code::FREQ => match self.input.read_u8() {
+                Ok(_freq) => self.next(),
+                Err(e) => Some(Err(e)),
+            },
+            _ => {
+                if self.filter.matches_db(self.current_database) {
+                    match read_blob(&mut self.input) {
+                        Ok(key) => {
+                            if self.filter.matches_type(next_op) && self.filter.matches_key(&key) {
+                                match self.read_type(&key, next_op) {
+                                    Ok(value) => Some(Ok(value)),
+                                    Err(e) => Some(Err(e)),
+                                }
+                            } else {
+                                match self.skip_object(next_op) {
+                                    Ok(_) => self.next(),
+                                    Err(e) => Some(Err(e)),
+                                }
+                            }
+                        }
+                        Err(e) => Some(Err(e)),
+                    }
+                } else {
+                    match self.skip_key_and_object(next_op) {
+                        Ok(_) => self.next(),
+                        Err(e) => Some(Err(e)),
+                    }
+                }
+            }
+        };
+
+        result
     }
 }

@@ -1,60 +1,47 @@
 use super::common::utils::{other_error, read_blob, read_exact, read_length};
 use super::common::{read_ziplist_entry_string, read_ziplist_metadata};
-use crate::formatter::Formatter;
-use crate::types::{EncodingType, RdbOk, RdbResult};
+use super::value::RdbValue;
+use crate::types::{RdbOk, RdbResult};
 use byteorder::{LittleEndian, ReadBytesExt};
+use std::collections::HashMap;
 use std::io::{Cursor, Read};
 
-pub fn read_hash<R: Read, F: Formatter>(
-    input: &mut R,
-    formatter: &mut F,
-    key: &[u8],
-    last_expiretime: Option<u64>,
-) -> RdbOk {
+pub fn read_hash<R: Read>(input: &mut R, key: &[u8], expiry: Option<u64>) -> RdbResult<RdbValue> {
     let mut hash_items = read_length(input)?;
-
-    formatter.start_hash(key, hash_items, last_expiretime, EncodingType::Hashtable);
+    let mut values = HashMap::new();
 
     while hash_items > 0 {
         let field = read_blob(input)?;
         let val = read_blob(input)?;
-
-        formatter.hash_element(key, &field, &val);
-
+        values.insert(field, val);
         hash_items -= 1;
     }
 
-    formatter.end_hash(key);
-
-    Ok(())
+    Ok(RdbValue::Hash {
+        key: key.to_vec(),
+        values,
+        expiry,
+    })
 }
 
-pub fn read_hash_ziplist<R: Read, F: Formatter>(
+pub fn read_hash_ziplist<R: Read>(
     input: &mut R,
-    formatter: &mut F,
     key: &[u8],
-    last_expiretime: Option<u64>,
-) -> RdbOk {
+    expiry: Option<u64>,
+) -> RdbResult<RdbValue> {
     let ziplist = read_blob(input)?;
-    let raw_length = ziplist.len() as u64;
-
     let mut reader = Cursor::new(ziplist);
     let (_zlbytes, _zltail, zllen) = read_ziplist_metadata(&mut reader)?;
 
     assert!(zllen % 2 == 0);
     let zllen = zllen / 2;
 
-    formatter.start_hash(
-        key,
-        zllen as u32,
-        last_expiretime,
-        EncodingType::Ziplist(raw_length),
-    );
+    let mut values = HashMap::new();
 
     for _ in 0..zllen {
         let field = read_ziplist_entry_string(&mut reader)?;
         let value = read_ziplist_entry_string(&mut reader)?;
-        formatter.hash_element(key, &field, &value);
+        values.insert(field, value);
     }
 
     let last_byte = reader.read_u8()?;
@@ -62,20 +49,19 @@ pub fn read_hash_ziplist<R: Read, F: Formatter>(
         return Err(other_error("Invalid end byte of ziplist"));
     }
 
-    formatter.end_hash(key);
-
-    Ok(())
+    Ok(RdbValue::Hash {
+        key: key.to_vec(),
+        values,
+        expiry,
+    })
 }
 
-pub fn read_hash_zipmap<R: Read, F: Formatter>(
+pub fn read_hash_zipmap<R: Read>(
     input: &mut R,
-    formatter: &mut F,
     key: &[u8],
-    last_expiretime: Option<u64>,
-) -> RdbOk {
+    expiry: Option<u64>,
+) -> RdbResult<RdbValue> {
     let zipmap = read_blob(input)?;
-    let raw_length = zipmap.len() as u64;
-
     let mut reader = Cursor::new(zipmap);
 
     let zmlen = reader.read_u8()?;
@@ -90,12 +76,7 @@ pub fn read_hash_zipmap<R: Read, F: Formatter>(
         size = 0;
     }
 
-    formatter.start_hash(
-        key,
-        size as u32,
-        last_expiretime,
-        EncodingType::Zipmap(raw_length),
-    );
+    let mut values = HashMap::new();
 
     loop {
         let next_byte = reader.read_u8()?;
@@ -110,7 +91,7 @@ pub fn read_hash_zipmap<R: Read, F: Formatter>(
         let _free = reader.read_u8()?;
         let value = read_zipmap_entry(next_byte, &mut reader)?;
 
-        formatter.hash_element(key, &field, &value);
+        values.insert(field, value);
 
         if length > 0 {
             length -= 1;
@@ -126,9 +107,11 @@ pub fn read_hash_zipmap<R: Read, F: Formatter>(
         }
     }
 
-    formatter.end_hash(key);
-
-    Ok(())
+    Ok(RdbValue::Hash {
+        key: key.to_vec(),
+        values,
+        expiry,
+    })
 }
 
 fn read_zipmap_entry<T: Read>(next_byte: u8, zipmap: &mut T) -> RdbResult<Vec<u8>> {
@@ -144,15 +127,12 @@ fn read_zipmap_entry<T: Read>(next_byte: u8, zipmap: &mut T) -> RdbResult<Vec<u8
     read_exact(zipmap, elem_len as usize)
 }
 
-pub fn read_hash_list_pack<R: Read, F: Formatter>(
+pub fn read_hash_list_pack<R: Read>(
     input: &mut R,
-    formatter: &mut F,
     key: &[u8],
-    last_expiretime: Option<u64>,
-) -> RdbOk {
+    expiry: Option<u64>,
+) -> RdbResult<RdbValue> {
     let listpack = read_blob(input)?;
-    let raw_length = listpack.len() as u64;
-
     let mut cursor = 0;
     cursor += 4;
     let size = u16::from_le_bytes(listpack[cursor..cursor + 2].try_into().unwrap()) as u32;
@@ -161,12 +141,7 @@ pub fn read_hash_list_pack<R: Read, F: Formatter>(
     assert!(size % 2 == 0);
     let num_pairs = size / 2;
 
-    formatter.start_hash(
-        key,
-        num_pairs,
-        last_expiretime,
-        EncodingType::ListPack(raw_length),
-    );
+    let mut values = HashMap::new();
 
     let mut reader = Cursor::new(listpack);
     reader.set_position(cursor as u64);
@@ -175,7 +150,7 @@ pub fn read_hash_list_pack<R: Read, F: Formatter>(
         let field = read_list_pack_entry_as_string(&mut reader)?;
         let value = read_list_pack_entry_as_string(&mut reader)?;
 
-        formatter.hash_element(key, &field, &value);
+        values.insert(field, value);
     }
 
     let last_byte = reader.read_u8()?;
@@ -183,9 +158,11 @@ pub fn read_hash_list_pack<R: Read, F: Formatter>(
         return Err(other_error("Invalid end byte of listpack"));
     }
 
-    formatter.end_hash(key);
-
-    Ok(())
+    Ok(RdbValue::Hash {
+        key: key.to_vec(),
+        values,
+        expiry,
+    })
 }
 
 fn read_list_pack_entry_as_string<R: Read>(reader: &mut R) -> RdbResult<Vec<u8>> {

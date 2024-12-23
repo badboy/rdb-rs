@@ -135,6 +135,21 @@ pub fn read_exact<T: Read>(reader: &mut T, len: usize) -> IoResult<Vec<u8>> {
     Ok(buf)
 }
 
+pub fn read_sequence<R: Read, T, F>(input: &mut R, mut transform: F) -> RdbResult<Vec<T>>
+where
+    F: FnMut(&mut R) -> RdbResult<T>,
+{
+    let mut len = read_length(input)?;
+    let mut values = Vec::with_capacity(len as usize);
+
+    while len > 0 {
+        values.push(transform(input)?);
+        len -= 1;
+    }
+
+    Ok(values)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
