@@ -1,5 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::io::Error as IoError;
+
+use indexmap::IndexMap;
 
 use crate::constants::encoding_type;
 
@@ -84,12 +86,12 @@ pub enum RdbValue {
     },
     Hash {
         key: Vec<u8>,
-        values: HashMap<Vec<u8>, Vec<u8>>,
+        values: IndexMap<Vec<u8>, Vec<u8>>,
         expiry: Option<u64>,
     },
     Set {
         key: Vec<u8>,
-        members: HashSet<Vec<u8>>,
+        members: Vec<Vec<u8>>,
         expiry: Option<u64>,
     },
     List {

@@ -14,15 +14,19 @@ pub struct RdbParser<R: Read, L: Filter> {
     filter: L,
     last_expiretime: Option<u64>,
     current_database: u32,
+    reached_eof: bool,
 }
 
 impl<R: Read, L: Filter> RdbParser<R, L> {
-    pub fn new(input: R, filter: L) -> RdbParser<R, L> {
+    pub fn new(mut input: R, filter: L) -> RdbParser<R, L> {
+        verify_magic(&mut input).unwrap();
+        verify_version(&mut input).unwrap();
         RdbParser {
             input,
             filter,
             last_expiretime: None,
             current_database: 0,
+            reached_eof: false,
         }
     }
 
@@ -158,20 +162,16 @@ impl<R: Read, L: Filter> RdbParser<R, L> {
         self.skip_object(enc_type)?;
         Ok(())
     }
-
-    fn read_value<T, F>(&mut self, f: F) -> Option<RdbValue>
-    where
-        F: FnOnce(&mut Self) -> RdbResult<T>,
-        T: Into<RdbValue>,
-    {
-        f(self).ok().map(Into::into)
-    }
 }
 
 impl<R: Read, L: Filter> Iterator for RdbParser<R, L> {
     type Item = RdbResult<RdbValue>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        if self.reached_eof {
+            return None;
+        }
+
         let result = (|| {
             let next_op = match self.input.read_u8() {
                 Ok(op) => op,
@@ -189,7 +189,8 @@ impl<R: Read, L: Filter> Iterator for RdbParser<R, L> {
                 op_code::EOF => {
                     let mut checksum = Vec::new();
                     self.input.read_to_end(&mut checksum)?;
-                    Ok(RdbValue::Checksum(checksum))
+                    self.reached_eof = true;
+                    return Ok(RdbValue::Checksum(checksum));
                 }
                 op_code::EXPIRETIME_MS => {
                     self.last_expiretime = Some(self.input.read_u64::<LittleEndian>()?);

@@ -2,7 +2,6 @@ use super::common::utils::{other_error, read_blob, read_exact, read_length, read
 use super::common::{read_ziplist_entry_string, read_ziplist_metadata};
 use crate::types::{RdbResult, RdbValue};
 use byteorder::{LittleEndian, ReadBytesExt};
-use std::collections::HashSet;
 use std::io::{Cursor, Read};
 use std::str;
 
@@ -28,7 +27,7 @@ pub fn read_set_intset<R: Read>(
     let byte_size = reader.read_u32::<LittleEndian>()?;
     let intset_length = reader.read_u32::<LittleEndian>()?;
 
-    let mut members = HashSet::new();
+    let mut members = Vec::with_capacity(intset_length as usize);
 
     for _ in 0..intset_length {
         let val = match byte_size {
@@ -38,12 +37,12 @@ pub fn read_set_intset<R: Read>(
             _ => panic!("unhandled byte size in intset: {}", byte_size),
         };
 
-        members.insert(val.to_string().as_bytes().to_vec());
+        members.push(val.to_string().as_bytes().to_vec());
     }
 
     Ok(RdbValue::Set {
         key: key.to_vec(),
-        members,
+        members: members.into_iter().collect(),
         expiry,
     })
 }

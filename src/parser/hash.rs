@@ -2,12 +2,13 @@ use super::common::utils::{other_error, read_blob, read_exact, read_length};
 use super::common::{read_ziplist_entry_string, read_ziplist_metadata};
 use crate::types::{RdbOk, RdbResult, RdbValue};
 use byteorder::{LittleEndian, ReadBytesExt};
+use indexmap::IndexMap;
 use std::collections::HashMap;
 use std::io::{Cursor, Read};
 
 pub fn read_hash<R: Read>(input: &mut R, key: &[u8], expiry: Option<u64>) -> RdbResult<RdbValue> {
     let mut hash_items = read_length(input)?;
-    let mut values = HashMap::new();
+    let mut values = IndexMap::new();
 
     while hash_items > 0 {
         let field = read_blob(input)?;
@@ -35,7 +36,7 @@ pub fn read_hash_ziplist<R: Read>(
     assert!(zllen % 2 == 0);
     let zllen = zllen / 2;
 
-    let mut values = HashMap::new();
+    let mut values = IndexMap::new();
 
     for _ in 0..zllen {
         let field = read_ziplist_entry_string(&mut reader)?;
@@ -75,7 +76,7 @@ pub fn read_hash_zipmap<R: Read>(
         size = 0;
     }
 
-    let mut values = HashMap::new();
+    let mut values = IndexMap::new();
 
     loop {
         let next_byte = reader.read_u8()?;
@@ -140,7 +141,7 @@ pub fn read_hash_list_pack<R: Read>(
     assert!(size % 2 == 0);
     let num_pairs = size / 2;
 
-    let mut values = HashMap::new();
+    let mut values = IndexMap::new();
 
     let mut reader = Cursor::new(listpack);
     reader.set_position(cursor as u64);

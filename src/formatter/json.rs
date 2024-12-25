@@ -35,29 +35,7 @@ impl JSON {
             element_index: 0,
         }
     }
-}
 
-fn encode_to_ascii(value: &[u8]) -> String {
-    match str::from_utf8(value) {
-        Ok(s) => json::encode(&s).unwrap(),
-        Err(_) => {
-            let s: String = value
-                .iter()
-                .map(|&b| {
-                    if b >= 32 && b < 127 {
-                        // ASCII printable characters
-                        (b as char).to_string()
-                    } else {
-                        format!("\\u{:04x}", b as u16)
-                    }
-                })
-                .collect();
-            format!("\"{}\"", s)
-        }
-    }
-}
-
-impl JSON {
     fn start_key(&mut self, length: u32) {
         if !self.is_first_key_in_db {
             write_str(&mut self.out, ",");
@@ -83,7 +61,29 @@ impl JSON {
     fn write_value(&mut self, value: &[u8]) {
         self.out.write_all(encode_to_ascii(value).as_bytes());
     }
+}
 
+fn encode_to_ascii(value: &[u8]) -> String {
+    match str::from_utf8(value) {
+        Ok(s) => json::encode(&s).unwrap(),
+        Err(_) => {
+            let s: String = value
+                .iter()
+                .map(|&b| {
+                    if b >= 32 && b < 127 {
+                        // ASCII printable characters
+                        (b as char).to_string()
+                    } else {
+                        format!("\\u{:04x}", b as u16)
+                    }
+                })
+                .collect();
+            format!("\"{}\"", s)
+        }
+    }
+}
+
+impl Formatter for JSON {
     fn start_rdb(&mut self) {
         write_str(&mut self.out, "[");
     }
@@ -113,7 +113,7 @@ impl JSON {
         self.write_value(value);
     }
 
-    fn start_hash(&mut self, key: &[u8], length: u32, _expiry: Option<u64>, _info: EncodingType) {
+    fn start_hash(&mut self, key: &[u8], length: u32, _expiry: Option<u64>) {
         self.start_key(length);
         self.write_key(key);
         write_str(&mut self.out, ":{");
@@ -134,13 +134,7 @@ impl JSON {
         self.out.flush();
     }
 
-    fn start_set(
-        &mut self,
-        key: &[u8],
-        cardinality: u32,
-        _expiry: Option<u64>,
-        _info: EncodingType,
-    ) {
+    fn start_set(&mut self, key: &[u8], cardinality: u32, _expiry: Option<u64>) {
         self.start_key(cardinality);
         self.write_key(key);
         write_str(&mut self.out, ":[");
@@ -157,7 +151,7 @@ impl JSON {
         self.write_value(member);
     }
 
-    fn start_list(&mut self, key: &[u8], length: u32, _expiry: Option<u64>, _info: EncodingType) {
+    fn start_list(&mut self, key: &[u8], length: u32, _expiry: Option<u64>) {
         self.start_key(length);
         self.write_key(key);
         write_str(&mut self.out, ":[");
@@ -173,13 +167,7 @@ impl JSON {
         self.write_value(value);
     }
 
-    fn start_sorted_set(
-        &mut self,
-        key: &[u8],
-        length: u32,
-        _expiry: Option<u64>,
-        _info: EncodingType,
-    ) {
+    fn start_sorted_set(&mut self, key: &[u8], length: u32, _expiry: Option<u64>) {
         self.start_key(length);
         self.write_key(key);
         write_str(&mut self.out, ":{");
@@ -196,9 +184,7 @@ impl JSON {
         write_str(&mut self.out, ":");
         self.write_value(score.to_string().as_bytes());
     }
-}
 
-impl Formatter for JSON {
     fn format(&mut self, value: &RdbValue) -> std::io::Result<()> {
         match value {
             RdbValue::Set {
@@ -206,10 +192,11 @@ impl Formatter for JSON {
                 members,
                 expiry,
             } => {
-                self.start_key(members.len() as u32);
-                self.write_key(key);
-                write_str(&mut self.out, ":");
-                self.write_value(&members.iter().next().unwrap());
+                self.start_set(key, members.len() as u32, *expiry);
+                for member in members {
+                    self.set_element(key, member);
+                }
+                self.end_set(key);
                 Ok(())
             }
             RdbValue::Hash {
@@ -217,11 +204,11 @@ impl Formatter for JSON {
                 values,
                 expiry,
             } => {
-                self.start_key(values.len() as u32);
-                self.write_key(key);
-                write_str(&mut self.out, ":");
-                let (key, value) = values.iter().next().unwrap();
-                self.write_value(value);
+                self.start_hash(key, values.len() as u32, *expiry);
+                for (field, value) in values {
+                    self.hash_element(key, field, value);
+                }
+                self.end_hash(key);
                 Ok(())
             }
             RdbValue::List {
@@ -229,10 +216,11 @@ impl Formatter for JSON {
                 values,
                 expiry,
             } => {
-                self.start_key(values.len() as u32);
-                self.write_key(key);
-                write_str(&mut self.out, ":");
-                self.write_value(&values.iter().next().unwrap());
+                self.start_list(key, values.len() as u32, *expiry);
+                for value in values {
+                    self.list_element(key, value);
+                }
+                self.end_list(key);
                 Ok(())
             }
             RdbValue::SortedSet {
@@ -240,11 +228,11 @@ impl Formatter for JSON {
                 values,
                 expiry,
             } => {
-                self.start_key(values.len() as u32);
-                self.write_key(key);
-                write_str(&mut self.out, ":");
-                let (_, member) = values.iter().next().unwrap();
-                self.write_value(member);
+                self.start_sorted_set(key, values.len() as u32, *expiry);
+                for (score, member) in values {
+                    self.sorted_set_element(key, *score, member);
+                }
+                self.end_sorted_set(key);
                 Ok(())
             }
             RdbValue::String { key, value, expiry } => {
@@ -261,16 +249,8 @@ impl Formatter for JSON {
             RdbValue::ResizeDb {
                 db_size,
                 expires_size,
-            } => {
-                self.start_database(*db_size);
-                Ok(())
-            }
-            RdbValue::AuxField { key, value } => {
-                self.write_key(key);
-                write_str(&mut self.out, ":");
-                self.write_value(value);
-                Ok(())
-            }
+            } => Ok(()),
+            RdbValue::AuxField { key, value } => Ok(()),
             _ => Ok(()),
         }
     }

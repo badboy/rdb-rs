@@ -95,11 +95,13 @@ pub mod types;
 
 pub fn parse<R: Read, F: Formatter, T: Filter>(input: R, mut formatter: F, filter: T) -> RdbOk {
     let parser = RdbParser::new(input, filter);
+    formatter.start_rdb();
     for value in parser {
         match value {
             Ok(value) => formatter.format(&value)?,
             Err(e) => return Err(e),
         }
     }
+    formatter.end_rdb();
     Ok(())
 }
