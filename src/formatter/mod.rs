@@ -1,5 +1,7 @@
 use std::io::Write;
 
+use indexmap::IndexMap;
+
 pub use self::json::JSON;
 pub use self::nil::Nil;
 pub use self::plain::Plain;
@@ -16,6 +18,7 @@ pub fn write_str<W: Write>(out: &mut W, data: &str) {
     out.write(data.as_bytes()).unwrap();
 }
 
+#[allow(unused_variables)]
 pub trait Formatter {
     fn start_rdb(&mut self) {}
     fn end_rdb(&mut self) {}
@@ -27,22 +30,64 @@ pub trait Formatter {
     fn resizedb(&mut self, db_size: u32, expires_size: u32) {}
     fn aux_field(&mut self, key: &[u8], value: &[u8]) {}
 
-    fn set(&mut self, key: &[u8], value: &[u8], expiry: Option<u64>) {}
+    fn string(&mut self, key: &Vec<u8>, value: &Vec<u8>, expiry: &Option<u64>) {}
 
-    fn start_hash(&mut self, key: &[u8], length: u32, expiry: Option<u64>) {}
-    fn end_hash(&mut self, key: &[u8]) {}
-    fn hash_element(&mut self, key: &[u8], field: &[u8], value: &[u8]) {}
+    fn hash(&mut self, key: &Vec<u8>, values: &IndexMap<Vec<u8>, Vec<u8>>, expiry: &Option<u64>) {}
 
-    fn start_set(&mut self, key: &[u8], cardinality: u32, expiry: Option<u64>) {}
-    fn end_set(&mut self, key: &[u8]) {}
-    fn set_element(&mut self, key: &[u8], member: &[u8]) {}
+    fn set(&mut self, key: &Vec<u8>, values: &Vec<Vec<u8>>, expiry: &Option<u64>) {}
 
-    fn start_list(&mut self, key: &[u8], length: u32, expiry: Option<u64>) {}
-    fn end_list(&mut self, key: &[u8]) {}
-    fn list_element(&mut self, key: &[u8], value: &[u8]) {}
+    fn list(&mut self, key: &Vec<u8>, values: &Vec<Vec<u8>>, expiry: &Option<u64>) {}
 
-    fn start_sorted_set(&mut self, key: &[u8], length: u32, expiry: Option<u64>) {}
-    fn end_sorted_set(&mut self, key: &[u8]) {}
-    fn sorted_set_element(&mut self, key: &[u8], score: f64, member: &[u8]) {}
-    fn format(&mut self, value: &RdbValue) -> std::io::Result<()>;
+    fn sorted_set(&mut self, key: &Vec<u8>, values: &Vec<(f64, Vec<u8>)>, expiry: &Option<u64>) {}
+
+    fn format(&mut self, value: &RdbValue) -> std::io::Result<()> {
+        match value {
+            RdbValue::Set {
+                key,
+                members,
+                expiry,
+            } => {
+                self.set(key, members, expiry);
+                Ok(())
+            }
+            RdbValue::Hash {
+                key,
+                values,
+                expiry,
+            } => {
+                self.hash(key, values, expiry);
+                Ok(())
+            }
+            RdbValue::List {
+                key,
+                values,
+                expiry,
+            } => {
+                self.list(key, values, expiry);
+                Ok(())
+            }
+            RdbValue::SortedSet {
+                key,
+                values,
+                expiry,
+            } => {
+                self.sorted_set(key, values, expiry);
+                Ok(())
+            }
+            RdbValue::String { key, value, expiry } => {
+                self.string(key, value, expiry);
+                Ok(())
+            }
+            RdbValue::SelectDb(db_number) => {
+                self.start_database(*db_number);
+                Ok(())
+            }
+            RdbValue::ResizeDb {
+                db_size,
+                expires_size,
+            } => Ok(()),
+            RdbValue::AuxField { key, value } => Ok(()),
+            _ => Ok(()),
+        }
+    }
 }

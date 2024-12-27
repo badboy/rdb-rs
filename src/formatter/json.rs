@@ -2,6 +2,7 @@
 use super::write_str;
 use crate::formatter::Formatter;
 use crate::types::{EncodingType, RdbValue};
+use indexmap::IndexMap;
 use serialize::json;
 use std::io;
 use std::io::Write;
@@ -106,152 +107,62 @@ impl Formatter for JSON {
         self.is_first_key_in_db = true;
     }
 
-    fn set(&mut self, key: &[u8], value: &[u8], _expiry: Option<u64>) {
+    fn string(&mut self, key: &Vec<u8>, value: &Vec<u8>, _expiry: &Option<u64>) {
         self.start_key(0);
         self.write_key(key);
         write_str(&mut self.out, ":");
         self.write_value(value);
     }
 
-    fn start_hash(&mut self, key: &[u8], length: u32, _expiry: Option<u64>) {
-        self.start_key(length);
+    fn hash(&mut self, key: &Vec<u8>, values: &IndexMap<Vec<u8>, Vec<u8>>, _expiry: &Option<u64>) {
+        self.start_key(values.len() as u32);
         self.write_key(key);
         write_str(&mut self.out, ":{");
-        self.out.flush();
-    }
-
-    fn end_hash(&mut self, _key: &[u8]) {
-        self.end_key();
-        write_str(&mut self.out, "}");
-        self.out.flush();
-    }
-
-    fn hash_element(&mut self, _key: &[u8], field: &[u8], value: &[u8]) {
-        self.write_comma();
-        self.write_key(field);
-        write_str(&mut self.out, ":");
-        self.write_value(value);
-        self.out.flush();
-    }
-
-    fn start_set(&mut self, key: &[u8], cardinality: u32, _expiry: Option<u64>) {
-        self.start_key(cardinality);
-        self.write_key(key);
-        write_str(&mut self.out, ":[");
-        self.out.flush();
-    }
-
-    fn end_set(&mut self, _key: &[u8]) {
-        self.end_key();
-        write_str(&mut self.out, "]");
-    }
-
-    fn set_element(&mut self, _key: &[u8], member: &[u8]) {
-        self.write_comma();
-        self.write_value(member);
-    }
-
-    fn start_list(&mut self, key: &[u8], length: u32, _expiry: Option<u64>) {
-        self.start_key(length);
-        self.write_key(key);
-        write_str(&mut self.out, ":[");
-    }
-
-    fn end_list(&mut self, _key: &[u8]) {
-        self.end_key();
-        write_str(&mut self.out, "]");
-    }
-
-    fn list_element(&mut self, _key: &[u8], value: &[u8]) {
-        self.write_comma();
-        self.write_value(value);
-    }
-
-    fn start_sorted_set(&mut self, key: &[u8], length: u32, _expiry: Option<u64>) {
-        self.start_key(length);
-        self.write_key(key);
-        write_str(&mut self.out, ":{");
-    }
-
-    fn end_sorted_set(&mut self, _key: &[u8]) {
-        self.end_key();
-        write_str(&mut self.out, "}");
-    }
-
-    fn sorted_set_element(&mut self, _key: &[u8], score: f64, member: &[u8]) {
-        self.write_comma();
-        self.write_key(member);
-        write_str(&mut self.out, ":");
-        self.write_value(score.to_string().as_bytes());
-    }
-
-    fn format(&mut self, value: &RdbValue) -> std::io::Result<()> {
-        match value {
-            RdbValue::Set {
-                key,
-                members,
-                expiry,
-            } => {
-                self.start_set(key, members.len() as u32, *expiry);
-                for member in members {
-                    self.set_element(key, member);
-                }
-                self.end_set(key);
-                Ok(())
-            }
-            RdbValue::Hash {
-                key,
-                values,
-                expiry,
-            } => {
-                self.start_hash(key, values.len() as u32, *expiry);
-                for (field, value) in values {
-                    self.hash_element(key, field, value);
-                }
-                self.end_hash(key);
-                Ok(())
-            }
-            RdbValue::List {
-                key,
-                values,
-                expiry,
-            } => {
-                self.start_list(key, values.len() as u32, *expiry);
-                for value in values {
-                    self.list_element(key, value);
-                }
-                self.end_list(key);
-                Ok(())
-            }
-            RdbValue::SortedSet {
-                key,
-                values,
-                expiry,
-            } => {
-                self.start_sorted_set(key, values.len() as u32, *expiry);
-                for (score, member) in values {
-                    self.sorted_set_element(key, *score, member);
-                }
-                self.end_sorted_set(key);
-                Ok(())
-            }
-            RdbValue::String { key, value, expiry } => {
-                self.start_key(0);
-                self.write_key(key);
-                write_str(&mut self.out, ":");
-                self.write_value(value);
-                Ok(())
-            }
-            RdbValue::SelectDb(db_number) => {
-                self.start_database(*db_number);
-                Ok(())
-            }
-            RdbValue::ResizeDb {
-                db_size,
-                expires_size,
-            } => Ok(()),
-            RdbValue::AuxField { key, value } => Ok(()),
-            _ => Ok(()),
+        for (field, value) in values {
+            self.write_comma();
+            self.write_key(field);
+            write_str(&mut self.out, ":");
+            self.write_value(value);
         }
+        self.end_key();
+        write_str(&mut self.out, "}");
+    }
+
+    fn set(&mut self, key: &Vec<u8>, values: &Vec<Vec<u8>>, _expiry: &Option<u64>) {
+        self.start_key(values.len() as u32);
+        self.write_key(key);
+        write_str(&mut self.out, ":[");
+        for value in values {
+            self.write_comma();
+            self.write_value(value);
+        }
+        self.end_key();
+        write_str(&mut self.out, "]");
+    }
+
+    fn list(&mut self, key: &Vec<u8>, values: &Vec<Vec<u8>>, _expiry: &Option<u64>) {
+        self.start_key(values.len() as u32);
+        self.write_key(key);
+        write_str(&mut self.out, ":[");
+        for value in values {
+            self.write_comma();
+            self.write_value(value);
+        }
+        self.end_key();
+        write_str(&mut self.out, "]");
+    }
+
+    fn sorted_set(&mut self, key: &Vec<u8>, values: &Vec<(f64, Vec<u8>)>, _expiry: &Option<u64>) {
+        self.start_key(values.len() as u32);
+        self.write_key(key);
+        write_str(&mut self.out, ":{");
+        for (score, member) in values {
+            self.write_comma();
+            self.write_key(member);
+            write_str(&mut self.out, ":");
+            self.write_value(score.to_string().as_bytes());
+        }
+        self.end_key();
+        write_str(&mut self.out, "}");
     }
 }

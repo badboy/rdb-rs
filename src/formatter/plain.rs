@@ -2,6 +2,7 @@
 use super::write_str;
 use crate::formatter::Formatter;
 use crate::types::{EncodingType, RdbValue};
+use indexmap::IndexMap;
 use serialize::hex::ToHex;
 use std::io;
 use std::io::Write;
@@ -43,15 +44,6 @@ impl Plain {
         self.dbnum = db_number;
     }
 
-    fn set(&mut self, key: &[u8], value: &[u8], _expiry: Option<u64>) {
-        self.write_line_start();
-        self.out.write_all(key);
-        write_str(&mut self.out, " -> ");
-
-        self.out.write_all(value);
-        write_str(&mut self.out, "\n");
-        self.out.flush();
-    }
 
     fn aux_field(&mut self, key: &[u8], value: &[u8]) {
         write_str(&mut self.out, "aux ");
@@ -125,9 +117,38 @@ impl Plain {
 }
 
 impl Formatter for Plain {
-    fn format(&mut self, value: &RdbValue) -> std::io::Result<()> {
-        match value {
-            _ => Ok(()),
+    fn string(&mut self, key: &Vec<u8>, value: &Vec<u8>, _expiry: &Option<u64>) {
+        self.write_line_start();
+        self.out.write_all(key);
+        write_str(&mut self.out, ":");
+        self.out.write_all(value);
+        write_str(&mut self.out, "\n");
+        self.out.flush();
+    }
+
+    fn hash(&mut self, key: &Vec<u8>, values: &IndexMap<Vec<u8>, Vec<u8>>, _expiry: &Option<u64>) {
+        for (field, value) in values {
+            self.hash_element(key, field, value);
         }
     }
+
+    fn set(&mut self, key: &Vec<u8>, values: &Vec<Vec<u8>>, _expiry: &Option<u64>) {
+        for value in values {
+            self.set_element(key, value);
+        }
+    }
+
+    fn list(&mut self, key: &Vec<u8>, values: &Vec<Vec<u8>>, _expiry: &Option<u64>) {
+        for value in values {
+            self.list_element(key, value);
+        }
+    }
+
+    fn sorted_set(&mut self, key: &Vec<u8>, values: &Vec<(f64, Vec<u8>)>, _expiry: &Option<u64>) {
+        for (score, member) in values {
+            self.sorted_set_element(key, *score, member);
+        }
+    }
+
+
 }
