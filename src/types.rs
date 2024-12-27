@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::io::Error as IoError;
 
 use indexmap::IndexMap;

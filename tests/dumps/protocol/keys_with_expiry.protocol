@@ -1,0 +1,19 @@
+*2
+$6
+SELECT
+$1
+0
+*3
+$3
+SET
+$20
+expires_ms_precision
+$27
+2022-12-25 10:11:12.573 UTC
+*3
+$9
+PEXPIREAT
+$20
+expires_ms_precision
+$13
+1671963072573

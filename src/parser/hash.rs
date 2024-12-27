@@ -1,9 +1,8 @@
 use super::common::utils::{other_error, read_blob, read_exact, read_length};
 use super::common::{read_ziplist_entry_string, read_ziplist_metadata};
-use crate::types::{RdbOk, RdbResult, RdbValue};
+use crate::types::{RdbResult, RdbValue};
 use byteorder::{LittleEndian, ReadBytesExt};
 use indexmap::IndexMap;
-use std::collections::HashMap;
 use std::io::{Cursor, Read};
 
 pub fn read_hash<R: Read>(input: &mut R, key: &[u8], expiry: Option<u64>) -> RdbResult<RdbValue> {
@@ -67,13 +66,10 @@ pub fn read_hash_zipmap<R: Read>(
     let zmlen = reader.read_u8()?;
 
     let mut length: i32;
-    let size;
     if zmlen <= 254 {
         length = zmlen as i32;
-        size = zmlen
     } else {
         length = -1;
-        size = 0;
     }
 
     let mut values = IndexMap::new();

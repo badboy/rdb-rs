@@ -1,0 +1,6 @@
+db=0 ziplist_compresses_easily[0] -> aaaaaa
+db=0 ziplist_compresses_easily[1] -> aaaaaaaaaaaa
+db=0 ziplist_compresses_easily[2] -> aaaaaaaaaaaaaaaaaa
+db=0 ziplist_compresses_easily[3] -> aaaaaaaaaaaaaaaaaaaaaaaa
+db=0 ziplist_compresses_easily[4] -> aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+db=0 ziplist_compresses_easily[5] -> aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa

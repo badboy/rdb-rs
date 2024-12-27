@@ -1,11 +1,11 @@
 #![allow(unused_must_use)]
 use super::write_str;
 use crate::formatter::Formatter;
-use crate::types::{EncodingType, RdbValue};
 use indexmap::IndexMap;
 use serialize::json;
 use std::io;
 use std::io::Write;
+use std::path::PathBuf;
 use std::str;
 
 pub struct JSON {
@@ -18,7 +18,7 @@ pub struct JSON {
 }
 
 impl JSON {
-    pub fn new(file_path: Option<&str>) -> JSON {
+    pub fn new(file_path: Option<PathBuf>) -> JSON {
         let out: Box<dyn Write> = match file_path {
             Some(path) => match std::fs::File::create(path) {
                 Ok(file) => Box::new(file),

@@ -1,0 +1,3 @@
+db=0 sorted_set_as_ziplist[0] -> {8b6ba6718a786daefa69438148361901, score=1}
+db=0 sorted_set_as_ziplist[1] -> {cb7a24bb7528f934b841b34c3a73e0c7, score=2.37}
+db=0 sorted_set_as_ziplist[2] -> {523af537946b79c4f8369ed39ba78605, score=3.423}

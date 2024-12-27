@@ -26,6 +26,10 @@ struct Cli {
     /// Type to show. Can be specified multiple times
     #[arg(short = 't', long = "type", value_name = "TYPE")]
     type_: Vec<String>,
+
+    /// Output file path. If not specified, writes to stdout
+    #[arg(short = 'o', long = "output", value_name = "FILE")]
+    output: Option<PathBuf>,
 }
 
 fn parse_type(type_str: &str) -> Option<rdb::Type> {
@@ -81,11 +85,11 @@ pub fn main() {
     let reader = BufReader::new(file);
 
     // Parse with the specified formatter
-    let res = match cli.format.as_deref().unwrap_or("json") {
-        "json" => rdb::parse(reader, rdb::formatter::JSON::new(None), filter),
-        "plain" => rdb::parse(reader, rdb::formatter::Plain::new(None), filter),
-        "nil" => rdb::parse(reader, rdb::formatter::Nil::new(None), filter),
-        "protocol" => rdb::parse(reader, rdb::formatter::Protocol::new(None), filter),
+    let output = match cli.format.as_deref().unwrap_or("json") {
+        "json" => rdb::parse(reader, rdb::formatter::JSON::new(cli.output), filter),
+        "plain" => rdb::parse(reader, rdb::formatter::Plain::new(cli.output), filter),
+        "nil" => rdb::parse(reader, rdb::formatter::Nil::new(cli.output), filter),
+        "protocol" => rdb::parse(reader, rdb::formatter::Protocol::new(cli.output), filter),
         f => {
             println!("Unknown format: {}\n", f);
             std::process::exit(1);
@@ -93,7 +97,7 @@ pub fn main() {
     };
 
     // Handle parsing errors
-    if let Err(e) = res {
+    if let Err(e) = output {
         println!("");
         let mut stderr = std::io::stderr();
         let out = format!("Parsing failed: {}\n", e);

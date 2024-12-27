@@ -1,0 +1,3 @@
+db=0 zipmap_compresses_easily . a -> aa
+db=0 zipmap_compresses_easily . aa -> aaaa
+db=0 zipmap_compresses_easily . aaaaa -> aaaaaaaaaaaaaa

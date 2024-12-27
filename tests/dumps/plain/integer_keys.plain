@@ -1,0 +1,6 @@
+db=0 183358245 -> Positive 32 bit integer
+db=0 125 -> Positive 8 bit integer
+db=0 -29477 -> Negative 16 bit integer
+db=0 -123 -> Negative 8 bit integer
+db=0 43947 -> Positive 16 bit integer
+db=0 -183358245 -> Negative 32 bit integer

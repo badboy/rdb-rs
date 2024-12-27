@@ -86,7 +86,14 @@ pub trait Formatter {
                 db_size,
                 expires_size,
             } => Ok(()),
-            RdbValue::AuxField { key, value } => Ok(()),
+            RdbValue::AuxField { key, value } => {
+                self.aux_field(key, value);
+                Ok(())
+            }
+            RdbValue::Checksum(checksum) => {
+                self.checksum(checksum);
+                Ok(())
+            }
             _ => Ok(()),
         }
     }

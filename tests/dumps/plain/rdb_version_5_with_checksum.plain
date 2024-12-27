@@ -1,0 +1,7 @@
+db=0 abcd -> efgh
+db=0 foo -> bar
+db=0 bar -> baz
+db=0 abcdef -> abcdef
+db=0 longerstring -> thisisalongerstring.idontknowwhatitmeans
+db=0 abc -> def
+checksum 187280c630952e79

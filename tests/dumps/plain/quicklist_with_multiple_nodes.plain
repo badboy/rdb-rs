@@ -1,0 +1,12 @@
+aux redis-ver -> 2.9.999
+aux redis-bits -> 64
+aux ctime -> 1420740379
+aux used-mem -> 508200
+db=0 quicklist[0] -> baaaaaaaaaaaaaaam
+db=0 quicklist[1] -> baz
+db=0 quicklist[2] -> 3
+db=0 quicklist[3] -> 2
+db=0 quicklist[4] -> 1
+db=0 quicklist[5] -> bar
+db=0 quicklist[6] -> foo
+checksum d5f6c0d5173895d7
