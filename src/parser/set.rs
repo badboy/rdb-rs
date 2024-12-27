@@ -1,6 +1,6 @@
-use super::common::utils::{other_error, read_blob, read_exact, read_length, read_sequence};
+use super::common::utils::{read_blob, read_exact, read_length, read_sequence};
 use super::common::{read_ziplist_entry_string, read_ziplist_metadata};
-use crate::types::{RdbResult, RdbValue};
+use crate::types::{RdbError, RdbResult, RdbValue};
 use byteorder::{LittleEndian, ReadBytesExt};
 use std::io::{Cursor, Read};
 use std::str;
@@ -103,7 +103,7 @@ pub fn read_sortedset_ziplist<R: Read>(
 
     let last_byte = reader.read_u8()?;
     if last_byte != 0xFF {
-        return Err(other_error("Invalid end byte of ziplist"));
+        return Err(RdbError::UnknownEncoding(last_byte));
     }
 
     Ok(RdbValue::SortedSet {

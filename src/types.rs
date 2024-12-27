@@ -1,11 +1,20 @@
-use std::io::Error as IoError;
+use thiserror::Error;
 
 use indexmap::IndexMap;
 
 use crate::constants::encoding_type;
 
-pub type RdbError = IoError;
-
+#[derive(Error, Debug)]
+pub enum RdbError {
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("No value found after {0}")]
+    MissingValue(&'static str),
+    #[error("Unknown encoding type: {0}")]
+    UnknownEncoding(u8),
+    #[error("Unknown encoding: {0}")]
+    UnknownEncodingValue(u64),
+}
 pub type RdbResult<T> = Result<T, RdbError>;
 
 pub type RdbOk = RdbResult<()>;

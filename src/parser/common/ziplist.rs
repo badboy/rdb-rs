@@ -1,7 +1,7 @@
 use std::io::Read;
 
-use super::utils::{other_error, read_exact};
-use crate::types::RdbResult;
+use super::utils::read_exact;
+use crate::types::{RdbError, RdbResult};
 use byteorder::{BigEndian, LittleEndian, ReadBytesExt};
 
 #[derive(Debug, Clone)]
@@ -34,11 +34,11 @@ fn read_ziplist_entry<R: Read>(input: &mut R) -> RdbResult<ZiplistEntry> {
         match input.read(&mut bytes) {
             Ok(4) => (),
             Ok(_) => {
-                return Err(other_error(
-                    "Could not read 4 bytes to skip after ziplist length",
+                return Err(RdbError::MissingValue(
+                    "4 bytes to skip after ziplist length",
                 ))
             }
-            Err(e) => return Err(e),
+            Err(e) => return Err(RdbError::Io(e)),
         };
     }
 
@@ -68,11 +68,11 @@ fn read_ziplist_entry<R: Read>(input: &mut R) -> RdbResult<ZiplistEntry> {
                         match input.read(&mut bytes) {
                             Ok(3) => (),
                             Ok(_) => {
-                                return Err(other_error(
-                                    "Could not read enough bytes for 24bit number",
+                                return Err(RdbError::MissingValue(
+                                    "24bit number",
                                 ))
                             }
-                            Err(e) => return Err(e),
+                            Err(e) => return Err(RdbError::Io(e)),
                         };
 
                         let number: i32 = (((bytes[2] as i32) << 24)
@@ -91,7 +91,7 @@ fn read_ziplist_entry<R: Read>(input: &mut R) -> RdbResult<ZiplistEntry> {
                     }
                 },
                 _ => {
-                    panic!("Flag not handled: {}", flag);
+                    return Err(RdbError::UnknownEncoding(flag));
                 }
             }
 

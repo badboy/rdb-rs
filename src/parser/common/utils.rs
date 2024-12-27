@@ -1,21 +1,13 @@
 use byteorder::{BigEndian, LittleEndian, ReadBytesExt};
 use lzf;
-use std::io::Error as IoError;
-use std::io::ErrorKind as IoErrorKind;
 use std::io::Read;
-use std::io::Result as IoResult;
-use std::str;
+use crate::types::RdbError;
 
 #[doc(hidden)]
 use crate::constants::{constant, encoding, version};
 
 #[doc(hidden)]
 pub use crate::types::{RdbOk, RdbResult};
-
-#[inline]
-pub fn other_error(desc: &'static str) -> IoError {
-    IoError::new(IoErrorKind::Other, desc)
-}
 
 pub fn read_length_with_encoding<R: Read>(input: &mut R) -> RdbResult<(u32, bool)> {
     let length;
@@ -52,14 +44,14 @@ pub fn verify_magic<R: Read>(input: &mut R) -> RdbOk {
     let mut magic = [0; 5];
     match input.read(&mut magic) {
         Ok(5) => (),
-        Ok(_) => return Err(other_error("Could not read enough bytes for the magic")),
-        Err(e) => return Err(e),
+        Ok(_) => return Err(RdbError::MissingValue("magic bytes")),
+        Err(e) => return Err(RdbError::Io(e)),
     };
 
     if magic == constant::RDB_MAGIC.as_bytes() {
         Ok(())
     } else {
-        Err(other_error("Invalid magic string"))
+        Err(RdbError::MissingValue("invalid magic string"))
     }
 }
 
@@ -70,10 +62,7 @@ pub fn verify_version<R: Read>(input: &mut R) -> RdbOk {
     // Check if all characters are ASCII digits
     for &byte in &buf {
         if !byte.is_ascii_digit() {
-            return Err(IoError::new(
-                IoErrorKind::InvalidData,
-                "Invalid version number",
-            ));
+            return Err(RdbError::MissingValue("invalid version number"));
         }
     }
 
@@ -85,10 +74,7 @@ pub fn verify_version<R: Read>(input: &mut R) -> RdbOk {
     let is_ok = version >= version::SUPPORTED_MINIMUM && version <= version::SUPPORTED_MAXIMUM;
 
     if !is_ok {
-        return Err(IoError::new(
-            IoErrorKind::InvalidData,
-            "Unsupported version",
-        ));
+        return Err(RdbError::MissingValue("unsupported version"));
     }
 
     Ok(())
@@ -128,7 +114,7 @@ pub fn int_to_vec(number: i32) -> Vec<u8> {
     result
 }
 
-pub fn read_exact<T: Read>(reader: &mut T, len: usize) -> IoResult<Vec<u8>> {
+pub fn read_exact<T: Read>(reader: &mut T, len: usize) -> RdbResult<Vec<u8>> {
     let mut buf = vec![0; len];
     reader.read_exact(&mut buf)?;
 

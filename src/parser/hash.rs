@@ -1,6 +1,6 @@
-use super::common::utils::{other_error, read_blob, read_exact, read_length};
+use super::common::utils::{read_blob, read_exact, read_length};
 use super::common::{read_ziplist_entry_string, read_ziplist_metadata};
-use crate::types::{RdbResult, RdbValue};
+use crate::types::{RdbError, RdbResult, RdbValue};
 use byteorder::{LittleEndian, ReadBytesExt};
 use indexmap::IndexMap;
 use std::io::{Cursor, Read};
@@ -45,7 +45,7 @@ pub fn read_hash_ziplist<R: Read>(
 
     let last_byte = reader.read_u8()?;
     if last_byte != 0xFF {
-        return Err(other_error("Invalid end byte of ziplist"));
+        return Err(RdbError::UnknownEncoding(last_byte));
     }
 
     Ok(RdbValue::Hash {
@@ -97,7 +97,7 @@ pub fn read_hash_zipmap<R: Read>(
             let last_byte = reader.read_u8()?;
 
             if last_byte != 0xFF {
-                return Err(other_error("Invalid end byte of zipmap"));
+                return Err(RdbError::UnknownEncoding(last_byte));
             }
             break;
         }
@@ -115,7 +115,7 @@ fn read_zipmap_entry<T: Read>(next_byte: u8, zipmap: &mut T) -> RdbResult<Vec<u8
     match next_byte {
         253 => elem_len = zipmap.read_u32::<LittleEndian>().unwrap(),
         254 | 255 => {
-            panic!("Invalid length value in zipmap: {}", next_byte)
+            return Err(RdbError::UnknownEncodingValue(next_byte as u64));
         }
         _ => elem_len = next_byte as u32,
     }
@@ -151,7 +151,7 @@ pub fn read_hash_list_pack<R: Read>(
 
     let last_byte = reader.read_u8()?;
     if last_byte != 0xFF {
-        return Err(other_error("Invalid end byte of listpack"));
+        return Err(RdbError::UnknownEncoding(last_byte));
     }
 
     Ok(RdbValue::Hash {
@@ -238,8 +238,8 @@ fn read_list_pack_entry_as_string<R: Read>(reader: &mut R) -> RdbResult<Vec<u8>>
                     skip_backlen(reader, (size + 1) as u32)?;
                     Ok(val.to_string().into_bytes())
                 }
-                15 => Err(other_error("Unexpected end of listpack entry")),
-                _ => Err(other_error("Unknown listpack entry header")),
+                15 => Err(RdbError::MissingValue("listpack entry")),
+                _ => Err(RdbError::UnknownEncoding(header)),
             },
         },
         _ => unreachable!(),
