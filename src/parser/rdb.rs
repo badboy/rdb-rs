@@ -145,6 +145,9 @@ impl<R: Read, L: Filter> RdbParser<R, L> {
                 read_length(&mut self.input)?
             }
             encoding_type::ZSET | encoding_type::HASH => read_length(&mut self.input)? * 2,
+            encoding_type::HASH_LIST_PACK => {
+                1
+            }
             _ => {
                 panic!("Unknown encoding type: {}", enc_type)
             }
