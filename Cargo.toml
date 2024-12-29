@@ -36,5 +36,11 @@ clap = { version = "4.4", features = ["derive"] }
 indexmap = "2.7.0"
 
 [dev-dependencies]
+async-std = { version = "1.13.0", features = ["attributes"] }
+tokio = { version = "1.0", features = ["full"] }
 pretty_assertions = "1.4.1"
+redis = "0.27.6"
 rstest = "0.23.0"
+testcontainers = "0.23.1"
+testcontainers-modules = { version = "0.11.4", features = ["redis"] }
+tempfile = "3.14.0"
