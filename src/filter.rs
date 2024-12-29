@@ -53,7 +53,7 @@ impl Filter for Simple {
             return true;
         }
 
-        let typ = Type::from_encoding(enc_type);
+        let typ = Type::from_encoding(enc_type).unwrap();
         self.types.iter().any(|x| *x == typ)
     }
 

@@ -9,7 +9,6 @@ use crate::constants::{encoding, encoding_type, op_code};
 use crate::filter::Filter;
 use crate::types::{RdbError, RdbValue};
 
-
 pub type RdbResult<T> = Result<T, RdbError>;
 
 pub struct RdbParser<R: Read, L: Filter> {
@@ -29,7 +28,7 @@ impl<R: Read, L: Filter> RdbParser<R, L> {
             current_database: 0,
             reached_eof: false,
         };
-        
+
         parser.verify_header()?;
         Ok(parser)
     }
@@ -50,9 +49,13 @@ impl<R: Read, L: Filter> RdbParser<R, L> {
                     expiry: self.last_expiretime,
                 }
             }
-            encoding_type::LIST => list::read_linked_list(&mut self.input, key, self.last_expiretime)?,
+            encoding_type::LIST => {
+                list::read_linked_list(&mut self.input, key, self.last_expiretime)?
+            }
             encoding_type::SET => set::read_set(&mut self.input, key, self.last_expiretime)?,
-            encoding_type::ZSET => set::read_sorted_set(&mut self.input, key, self.last_expiretime)?,
+            encoding_type::ZSET => {
+                set::read_sorted_set(&mut self.input, key, self.last_expiretime)?
+            }
             encoding_type::HASH => hash::read_hash(&mut self.input, key, self.last_expiretime)?,
             encoding_type::HASH_ZIPMAP => {
                 hash::read_hash_zipmap(&mut self.input, key, self.last_expiretime)?
@@ -79,7 +82,7 @@ impl<R: Read, L: Filter> RdbParser<R, L> {
                 todo!("read_zset_2 not implemented");
             }
             encoding_type::LIST_QUICKLIST_2 => {
-                todo!("read_quicklist_2 not implemented");
+                list::read_quicklist_2(&mut self.input, key, self.last_expiretime)?
             }
             encoding_type::STREAM_LIST_PACKS => {
                 todo!("read_stream_list_packs v1 not implemented");
@@ -94,11 +97,14 @@ impl<R: Read, L: Filter> RdbParser<R, L> {
                 todo!("read_zset_list_pack not implemented");
             }
             encoding_type::SET_LIST_PACK => {
-                todo!("read_set_list_pack not implemented");
+                set::read_set_list_pack(&mut self.input, key, self.last_expiretime)?
             }
             unknown_type => {
                 self.skip_object(unknown_type)?;
-                return self.next().and_then(Result::ok).ok_or(RdbError::MissingValue("skip"));
+                return self
+                    .next()
+                    .and_then(Result::ok)
+                    .ok_or(RdbError::MissingValue("skip"));
             }
         };
         Ok(result)
@@ -106,7 +112,9 @@ impl<R: Read, L: Filter> RdbParser<R, L> {
 
     fn skip(&mut self, skip_bytes: usize) -> RdbResult<()> {
         let mut buf = vec![0; skip_bytes];
-        self.input.read_exact(&mut buf).map_err(|e| RdbError::Io(e))?;
+        self.input
+            .read_exact(&mut buf)
+            .map_err(|e| RdbError::Io(e))?;
         Ok(())
     }
 
@@ -125,7 +133,10 @@ impl<R: Read, L: Filter> RdbParser<R, L> {
                     compressed_length
                 }
                 _ => {
-                    return Err(RdbError::UnknownEncodingValue(len as u64));
+                    return Err(RdbError::ParsingError {
+                        context: "skip_blob",
+                        message: format!("Unknown encoding value: {}", len),
+                    });
                 }
             }
         } else {
@@ -137,14 +148,18 @@ impl<R: Read, L: Filter> RdbParser<R, L> {
 
     fn skip_object(&mut self, enc_type: u8) -> RdbResult<()> {
         let blobs_count = match enc_type {
-            encoding_type::STRING | encoding_type::HASH_ZIPMAP | encoding_type::LIST_ZIPLIST 
-            | encoding_type::SET_INTSET | encoding_type::ZSET_ZIPLIST 
-            | encoding_type::HASH_ZIPLIST | encoding_type::HASH_LIST_PACK => 1,
+            encoding_type::STRING
+            | encoding_type::HASH_ZIPMAP
+            | encoding_type::LIST_ZIPLIST
+            | encoding_type::SET_INTSET
+            | encoding_type::ZSET_ZIPLIST
+            | encoding_type::HASH_ZIPLIST
+            | encoding_type::HASH_LIST_PACK => 1,
             encoding_type::LIST | encoding_type::SET | encoding_type::LIST_QUICKLIST => {
                 read_length(&mut self.input)?
             }
             encoding_type::ZSET | encoding_type::HASH => read_length(&mut self.input)? * 2,
-            _ => return Err(RdbError::UnknownEncoding(enc_type))
+            _ => return Err(RdbError::UnknownEncoding(enc_type)),
         };
 
         for _ in 0..blobs_count {
@@ -195,11 +210,13 @@ impl<R: Read, L: Filter> RdbParser<R, L> {
             }
             op_code::EXPIRETIME_MS => {
                 self.last_expiretime = Some(self.input.read_u64::<LittleEndian>()?);
-                self.next().ok_or_else(|| RdbError::MissingValue("expiry"))?
+                self.next()
+                    .ok_or_else(|| RdbError::MissingValue("expiry"))?
             }
             op_code::EXPIRETIME => {
                 self.last_expiretime = Some(self.input.read_u32::<BigEndian>()? as u64 * 1000);
-                self.next().ok_or_else(|| RdbError::MissingValue("expiry"))?
+                self.next()
+                    .ok_or_else(|| RdbError::MissingValue("expiry"))?
             }
             op_code::RESIZEDB => {
                 let db_size = read_length(&mut self.input)?;
@@ -216,7 +233,8 @@ impl<R: Read, L: Filter> RdbParser<R, L> {
             }
             op_code::MODULE_AUX => {
                 self.skip_blob()?;
-                self.next().ok_or_else(|| RdbError::MissingValue("module aux"))?
+                self.next()
+                    .ok_or_else(|| RdbError::MissingValue("module aux"))?
             }
             op_code::IDLE => {
                 let _idle_time = read_length(&mut self.input)?;

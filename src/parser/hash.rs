@@ -1,5 +1,7 @@
 use super::common::utils::{read_blob, read_exact, read_length};
-use super::common::{read_ziplist_entry_string, read_ziplist_metadata};
+use super::common::{
+    read_list_pack_entry_as_string, read_ziplist_entry_string, read_ziplist_metadata,
+};
 use crate::types::{RdbError, RdbResult, RdbValue};
 use byteorder::{LittleEndian, ReadBytesExt};
 use indexmap::IndexMap;
@@ -45,7 +47,10 @@ pub fn read_hash_ziplist<R: Read>(
 
     let last_byte = reader.read_u8()?;
     if last_byte != 0xFF {
-        return Err(RdbError::UnknownEncoding(last_byte));
+        return Err(RdbError::ParsingError {
+            context: "read_hash_ziplist",
+            message: format!("Unknown encoding value: {}", last_byte),
+        });
     }
 
     Ok(RdbValue::Hash {
@@ -97,7 +102,10 @@ pub fn read_hash_zipmap<R: Read>(
             let last_byte = reader.read_u8()?;
 
             if last_byte != 0xFF {
-                return Err(RdbError::UnknownEncoding(last_byte));
+                return Err(RdbError::ParsingError {
+                    context: "read_hash_zipmap",
+                    message: format!("Unknown encoding value: {}", last_byte),
+                });
             }
             break;
         }
@@ -115,7 +123,10 @@ fn read_zipmap_entry<T: Read>(next_byte: u8, zipmap: &mut T) -> RdbResult<Vec<u8
     match next_byte {
         253 => elem_len = zipmap.read_u32::<LittleEndian>().unwrap(),
         254 | 255 => {
-            return Err(RdbError::UnknownEncodingValue(next_byte as u64));
+            return Err(RdbError::ParsingError {
+                context: "read_zipmap_entry",
+                message: format!("Unknown encoding value: {}", next_byte),
+            });
         }
         _ => elem_len = next_byte as u32,
     }
@@ -130,28 +141,16 @@ pub fn read_hash_list_pack<R: Read>(
 ) -> RdbResult<RdbValue> {
     let listpack = read_blob(input)?;
     let mut cursor = 0;
-    cursor += 4;
-    let size = u16::from_le_bytes(listpack[cursor..cursor + 2].try_into().unwrap()) as u32;
-    cursor += 2;
-
-    assert!(size % 2 == 0);
-    let num_pairs = size / 2;
+    let size = read_list_pack_length(&listpack, &mut cursor);
 
     let mut values = IndexMap::new();
-
     let mut reader = Cursor::new(listpack);
     reader.set_position(cursor as u64);
 
-    for _ in 0..num_pairs {
+    for _ in 0..size / 2 {
         let field = read_list_pack_entry_as_string(&mut reader)?;
         let value = read_list_pack_entry_as_string(&mut reader)?;
-
         values.insert(field, value);
-    }
-
-    let last_byte = reader.read_u8()?;
-    if last_byte != 0xFF {
-        return Err(RdbError::UnknownEncoding(last_byte));
     }
 
     Ok(RdbValue::Hash {
@@ -161,105 +160,10 @@ pub fn read_hash_list_pack<R: Read>(
     })
 }
 
-fn read_list_pack_entry_as_string<R: Read>(reader: &mut R) -> RdbResult<Vec<u8>> {
-    let header = reader.read_u8()?;
-
-    match header >> 6 {
-        0 | 1 => {
-            let val = (header & 0x7F) as i8;
-            Ok(val.to_string().into_bytes())
-        }
-        2 => {
-            let str_len = (header & 0x3F) as usize;
-            let mut result = vec![0; str_len];
-            reader.read_exact(&mut result)?;
-
-            let content_len = 1 + str_len;
-            skip_backlen(reader, content_len as u32)?;
-
-            Ok(result)
-        }
-        3 => match header >> 4 {
-            12 | 13 => {
-                let next = reader.read_u8()?;
-                let mut val = (((header & 0x1F) as u16) << 8) | (next as u16);
-                if val >= 1 << 12 {
-                    val = !(8191 - val);
-                }
-                skip_backlen(reader, 2)?;
-                Ok(val.to_string().into_bytes())
-            }
-            14 => {
-                let len_high = (header & 0x0F) as u16;
-                let len_low = reader.read_u8()? as u16;
-                let str_len = ((len_high << 8) | len_low) as usize;
-
-                let mut result = vec![0; str_len];
-                reader.read_exact(&mut result)?;
-
-                skip_backlen(reader, (2 + str_len) as u32)?;
-                Ok(result)
-            }
-            _ => match header & 0x0F {
-                0 => {
-                    let mut len_bytes = [0u8; 4];
-                    reader.read_exact(&mut len_bytes)?;
-                    let str_len = u32::from_le_bytes(len_bytes) as usize;
-
-                    let mut result = vec![0; str_len];
-                    reader.read_exact(&mut result)?;
-
-                    skip_backlen(reader, (5 + str_len) as u32)?;
-                    Ok(result)
-                }
-                1..=4 => {
-                    let size = match header & 0x0F {
-                        1 => 2,
-                        2 => 3,
-                        3 => 4,
-                        4 => 8,
-                        _ => unreachable!(),
-                    };
-                    let mut int_bytes = vec![0; size];
-                    reader.read_exact(&mut int_bytes)?;
-
-                    let val = match size {
-                        2 => i16::from_le_bytes(int_bytes.try_into().unwrap()) as i64,
-                        3 => {
-                            let mut bytes = [0u8; 4];
-                            bytes[..3].copy_from_slice(&int_bytes);
-                            i32::from_le_bytes(bytes) as i64 >> 8
-                        }
-                        4 => i32::from_le_bytes(int_bytes.try_into().unwrap()) as i64,
-                        8 => i64::from_le_bytes(int_bytes.try_into().unwrap()),
-                        _ => unreachable!(),
-                    };
-
-                    skip_backlen(reader, (size + 1) as u32)?;
-                    Ok(val.to_string().into_bytes())
-                }
-                15 => Err(RdbError::MissingValue("listpack entry")),
-                _ => Err(RdbError::UnknownEncoding(header)),
-            },
-        },
-        _ => unreachable!(),
-    }
-}
-
-fn skip_backlen<R: Read>(reader: &mut R, element_len: u32) -> RdbResult<()> {
-    let backlen = if element_len <= 127 {
-        1
-    } else if element_len < (1 << 14) - 1 {
-        2
-    } else if element_len < (1 << 21) - 1 {
-        3
-    } else if element_len < (1 << 28) - 1 {
-        4
-    } else {
-        5
-    };
-
-    let mut buf = vec![0; backlen];
-    reader.read_exact(&mut buf)?;
-    Ok(())
+fn read_list_pack_length(buf: &[u8], cursor: &mut usize) -> usize {
+    let _total_bytes = u32::from_le_bytes(buf[*cursor..*cursor + 4].try_into().unwrap()) as usize;
+    *cursor += 4;
+    let count = u16::from_le_bytes(buf[*cursor..*cursor + 2].try_into().unwrap()) as usize;
+    *cursor += 2;
+    count
 }

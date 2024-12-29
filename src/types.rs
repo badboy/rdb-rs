@@ -12,8 +12,11 @@ pub enum RdbError {
     MissingValue(&'static str),
     #[error("Unknown encoding type: {0}")]
     UnknownEncoding(u8),
-    #[error("Unknown encoding: {0}")]
-    UnknownEncodingValue(u64),
+    #[error("Parsing error in {context}: {message}")]
+    ParsingError {
+        context: &'static str,
+        message: String,
+    },
 }
 pub type RdbResult<T> = Result<T, RdbError>;
 
@@ -31,31 +34,29 @@ pub enum Type {
 }
 
 impl Type {
-    pub fn from_encoding(enc_type: u8) -> Type {
+    pub fn from_encoding(enc_type: u8) -> RdbResult<Type> {
         match enc_type {
-            encoding_type::STRING => Type::String,
+            encoding_type::STRING => Ok(Type::String),
             encoding_type::HASH
             | encoding_type::HASH_ZIPMAP
             | encoding_type::HASH_ZIPLIST
-            | encoding_type::HASH_LIST_PACK => Type::Hash,
+            | encoding_type::HASH_LIST_PACK => Ok(Type::Hash),
             encoding_type::LIST
             | encoding_type::LIST_ZIPLIST
             | encoding_type::LIST_QUICKLIST
-            | encoding_type::LIST_QUICKLIST_2 => Type::List,
+            | encoding_type::LIST_QUICKLIST_2 => Ok(Type::List),
             encoding_type::SET | encoding_type::SET_INTSET | encoding_type::SET_LIST_PACK => {
-                Type::Set
+                Ok(Type::Set)
             }
             encoding_type::ZSET
             | encoding_type::ZSET_ZIPLIST
             | encoding_type::ZSET_2
-            | encoding_type::ZSET_LIST_PACK => Type::SortedSet,
+            | encoding_type::ZSET_LIST_PACK => Ok(Type::SortedSet),
             encoding_type::STREAM_LIST_PACKS
             | encoding_type::STREAM_LIST_PACKS_2
-            | encoding_type::STREAM_LIST_PACKS_3 => Type::Stream,
-            encoding_type::MODULE | encoding_type::MODULE_2 => Type::Module,
-            _ => {
-                panic!("Unknown encoding type: {}", enc_type)
-            }
+            | encoding_type::STREAM_LIST_PACKS_3 => Ok(Type::Stream),
+            encoding_type::MODULE | encoding_type::MODULE_2 => Ok(Type::Module),
+            _ => Err(RdbError::UnknownEncoding(enc_type)),
         }
     }
 }

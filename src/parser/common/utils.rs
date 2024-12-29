@@ -1,7 +1,7 @@
+use crate::types::RdbError;
 use byteorder::{BigEndian, LittleEndian, ReadBytesExt};
 use lzf;
 use std::io::Read;
-use crate::types::RdbError;
 
 #[doc(hidden)]
 use crate::constants::{constant, encoding, version};

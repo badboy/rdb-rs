@@ -67,11 +67,7 @@ fn read_ziplist_entry<R: Read>(input: &mut R) -> RdbResult<ZiplistEntry> {
                         let mut bytes = [0; 3];
                         match input.read(&mut bytes) {
                             Ok(3) => (),
-                            Ok(_) => {
-                                return Err(RdbError::MissingValue(
-                                    "24bit number",
-                                ))
-                            }
+                            Ok(_) => return Err(RdbError::MissingValue("24bit number")),
                             Err(e) => return Err(RdbError::Io(e)),
                         };
 
@@ -91,7 +87,10 @@ fn read_ziplist_entry<R: Read>(input: &mut R) -> RdbResult<ZiplistEntry> {
                     }
                 },
                 _ => {
-                    return Err(RdbError::UnknownEncoding(flag));
+                    return Err(RdbError::ParsingError {
+                        context: "read_ziplist_entry",
+                        message: format!("Unknown encoding value: {}", flag),
+                    });
                 }
             }
 
