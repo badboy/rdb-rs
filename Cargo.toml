@@ -34,6 +34,7 @@ byteorder = "0.5"
 thiserror = "1.0"
 clap = { version = "4.4", features = ["derive"] }
 indexmap = "2.7.0"
+log = "0.4.22"
 
 [dev-dependencies]
 async-std = { version = "1.13.0", features = ["attributes"] }

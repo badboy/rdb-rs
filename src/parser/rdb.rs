@@ -100,6 +100,7 @@ impl<R: Read, L: Filter> RdbParser<R, L> {
                 set::read_set_list_pack(&mut self.input, key, self.last_expiretime)?
             }
             unknown_type => {
+                log::debug!("Skipping unknown encoding type: {}", unknown_type);
                 self.skip_object(unknown_type)?;
                 return self
                     .next()
