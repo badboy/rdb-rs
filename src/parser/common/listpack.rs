@@ -33,6 +33,7 @@ pub fn read_list_pack_entry_as_string<R: Read>(reader: &mut R) -> RdbResult<Vec<
     match header >> 6 {
         0 | 1 => {
             let val = (header & 0x7F) as i8;
+            skip_backlen(reader, 1)?;
             Ok(val.to_string().into_bytes())
         }
         2 => {
@@ -113,4 +114,13 @@ pub fn read_list_pack_entry_as_string<R: Read>(reader: &mut R) -> RdbResult<Vec<
         },
         _ => unreachable!(),
     }
+}
+
+
+pub fn read_list_pack_length(buf: &[u8], cursor: &mut usize) -> usize {
+    let _total_bytes = u32::from_le_bytes(buf[*cursor..*cursor + 4].try_into().unwrap()) as usize;
+    *cursor += 4;
+    let count = u16::from_le_bytes(buf[*cursor..*cursor + 2].try_into().unwrap()) as usize;
+    *cursor += 2;
+    count
 }

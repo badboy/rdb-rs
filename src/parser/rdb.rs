@@ -1,7 +1,7 @@
 use super::common::utils::{
     read_blob, read_length, read_length_with_encoding, verify_magic, verify_version,
 };
-use super::{hash, list, set};
+use super::{hash, list, set, sorted_set};
 use byteorder::{BigEndian, LittleEndian, ReadBytesExt};
 use std::io::Read;
 
@@ -54,7 +54,7 @@ impl<R: Read, L: Filter> RdbParser<R, L> {
             }
             encoding_type::SET => set::read_set(&mut self.input, key, self.last_expiretime)?,
             encoding_type::ZSET => {
-                set::read_sorted_set(&mut self.input, key, self.last_expiretime)?
+                sorted_set::read_sorted_set(&mut self.input, key, self.last_expiretime, false)?
             }
             encoding_type::HASH => hash::read_hash(&mut self.input, key, self.last_expiretime)?,
             encoding_type::HASH_ZIPMAP => {
@@ -67,7 +67,7 @@ impl<R: Read, L: Filter> RdbParser<R, L> {
                 set::read_set_intset(&mut self.input, key, self.last_expiretime)?
             }
             encoding_type::ZSET_ZIPLIST => {
-                set::read_sortedset_ziplist(&mut self.input, key, self.last_expiretime)?
+                sorted_set::read_sorted_set_ziplist(&mut self.input, key, self.last_expiretime)?
             }
             encoding_type::HASH_ZIPLIST => {
                 hash::read_hash_ziplist(&mut self.input, key, self.last_expiretime)?
@@ -79,7 +79,7 @@ impl<R: Read, L: Filter> RdbParser<R, L> {
                 hash::read_hash_list_pack(&mut self.input, key, self.last_expiretime)?
             }
             encoding_type::ZSET_2 => {
-                todo!("read_zset_2 not implemented");
+                sorted_set::read_sorted_set(&mut self.input, key, self.last_expiretime, true)?
             }
             encoding_type::LIST_QUICKLIST_2 => {
                 list::read_quicklist_2(&mut self.input, key, self.last_expiretime)?
@@ -94,7 +94,7 @@ impl<R: Read, L: Filter> RdbParser<R, L> {
                 todo!("read_stream_list_packs v3 not implemented");
             }
             encoding_type::ZSET_LIST_PACK => {
-                todo!("read_zset_list_pack not implemented");
+                sorted_set::read_sorted_set_listpack(&mut self.input, key, self.last_expiretime)?
             }
             encoding_type::SET_LIST_PACK => {
                 set::read_set_list_pack(&mut self.input, key, self.last_expiretime)?

@@ -1,11 +1,8 @@
-use super::common::utils::{read_blob, read_exact, read_length, read_sequence};
-use super::common::{
-    read_list_pack_entry_as_string, read_ziplist_entry_string, read_ziplist_metadata,
-};
+use super::common::utils::{read_blob, read_sequence};
+use super::common::read_list_pack_entry_as_string;
 use crate::types::{RdbError, RdbResult, RdbValue};
 use byteorder::{LittleEndian, ReadBytesExt};
 use std::io::{Cursor, Read};
-use std::str;
 
 pub fn read_set<R: Read>(input: &mut R, key: &[u8], expiry: Option<u64>) -> RdbResult<RdbValue> {
     let values = read_sequence(input, |input| read_blob(input))?;
@@ -45,75 +42,6 @@ pub fn read_set_intset<R: Read>(
     Ok(RdbValue::Set {
         key: key.to_vec(),
         members: members.into_iter().collect(),
-        expiry,
-    })
-}
-
-pub fn read_sorted_set<R: Read>(
-    input: &mut R,
-    key: &[u8],
-    expiry: Option<u64>,
-) -> RdbResult<RdbValue> {
-    let mut set_items = read_length(input)?;
-    let mut values = Vec::with_capacity(set_items as usize);
-
-    while set_items > 0 {
-        let val = read_blob(input)?;
-        let score_length = input.read_u8()?;
-        let score = match score_length {
-            253 => f64::NAN,
-            254 => f64::INFINITY,
-            255 => f64::NEG_INFINITY,
-            _ => {
-                let tmp = read_exact(input, score_length as usize)?;
-                unsafe { str::from_utf8_unchecked(&tmp) }
-                    .parse::<f64>()
-                    .unwrap()
-            }
-        };
-
-        values.push((score, val));
-        set_items -= 1;
-    }
-
-    Ok(RdbValue::SortedSet {
-        key: key.to_vec(),
-        values,
-        expiry,
-    })
-}
-
-pub fn read_sortedset_ziplist<R: Read>(
-    input: &mut R,
-    key: &[u8],
-    expiry: Option<u64>,
-) -> RdbResult<RdbValue> {
-    let ziplist = read_blob(input)?;
-    let mut reader = Cursor::new(ziplist);
-    let (_zlbytes, _zltail, zllen) = read_ziplist_metadata(&mut reader)?;
-
-    assert!(zllen % 2 == 0);
-    let zllen = zllen / 2;
-    let mut values = Vec::with_capacity(zllen as usize);
-
-    for _ in 0..zllen {
-        let entry = read_ziplist_entry_string(&mut reader)?;
-        let score = read_ziplist_entry_string(&mut reader)?;
-        let score = str::from_utf8(&score).unwrap().parse::<f64>().unwrap();
-        values.push((score, entry));
-    }
-
-    let last_byte = reader.read_u8()?;
-    if last_byte != 0xFF {
-        return Err(RdbError::ParsingError {
-            context: "read_sortedset_ziplist",
-            message: format!("Unknown encoding value: {}", last_byte),
-        });
-    }
-
-    Ok(RdbValue::SortedSet {
-        key: key.to_vec(),
-        values,
         expiry,
     })
 }

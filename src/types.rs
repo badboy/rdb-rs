@@ -29,8 +29,8 @@ pub enum Type {
     Set,
     SortedSet,
     Hash,
-    Stream, // New type for streams
-    Module, // New type for module data
+    Stream,
+    Module,
 }
 
 impl Type {
@@ -71,9 +71,9 @@ pub enum EncodingType {
     Ziplist(u64),
     Zipmap(u64),
     Quicklist,
-    Quicklist2,    // New Quicklist v2 encoding
-    ZSet2,         // New ZSet2 encoding
-    ListPack(u64), // New ListPack encoding
+    Quicklist2,
+    ZSet2,
+    ListPack(u64),
 }
 
 #[derive(Debug)]

@@ -1,6 +1,6 @@
 use super::common::utils::{read_blob, read_exact, read_length};
 use super::common::{
-    read_list_pack_entry_as_string, read_ziplist_entry_string, read_ziplist_metadata,
+    read_list_pack_entry_as_string, read_ziplist_entry_string, read_ziplist_metadata, read_list_pack_length
 };
 use crate::types::{RdbError, RdbResult, RdbValue};
 use byteorder::{LittleEndian, ReadBytesExt};
@@ -158,12 +158,4 @@ pub fn read_hash_list_pack<R: Read>(
         values,
         expiry,
     })
-}
-
-fn read_list_pack_length(buf: &[u8], cursor: &mut usize) -> usize {
-    let _total_bytes = u32::from_le_bytes(buf[*cursor..*cursor + 4].try_into().unwrap()) as usize;
-    *cursor += 4;
-    let count = u16::from_le_bytes(buf[*cursor..*cursor + 2].try_into().unwrap()) as usize;
-    *cursor += 2;
-    count
 }

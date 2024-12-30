@@ -179,18 +179,24 @@ async fn test_redis_protocol(#[case] major_version: u8, #[case] minor_version: u
     let mut conn = client.get_connection().unwrap();
 
     let commands = vec![
-        ("SET", vec!["foo", "bar"]),
-        ("HSET", vec!["player:1", "name", "John"]),
-        ("HSET", vec!["player:1", "age", "25"]),
-        ("SADD", vec!["planets", "Earth"]),
-        ("SADD", vec!["planets", "Mars"]),
-        ("SADD", vec!["planets", "Jupiter"]),
-        ("RPUSH", vec!["dogs", "Rex"]),
-        ("RPUSH", vec!["dogs", "Bella"]),
-        ("RPUSH", vec!["dogs", "Max"]),
-        ("RPUSH", vec!["numbers", "1"]),
-        ("RPUSH", vec!["numbers", "2"]),
-        ("RPUSH", vec!["numbers", "3"]),
+        ("SET", vec!["string", "bar"]),
+        ("HSET", vec!["hash", "name", "John"]),
+        ("HSET", vec!["hash", "age", "25"]),
+        ("SADD", vec!["set_strings", "Earth"]),
+        ("SADD", vec!["set_strings", "Mars"]),
+        ("SADD", vec!["set_strings", "Jupiter"]),
+        ("SADD", vec!["set_numbers", "1"]),
+        ("SADD", vec!["set_numbers", "2"]),
+        ("SADD", vec!["set_numbers", "3"]),
+        ("ZADD", vec!["sorted_set", "1", "a"]),
+        ("ZADD", vec!["sorted_set", "2", "b"]),
+        ("ZADD", vec!["sorted_set", "3", "c"]),
+        ("RPUSH", vec!["list_strings", "Rex"]),
+        ("RPUSH", vec!["list_strings", "Bella"]),
+        ("RPUSH", vec!["list_strings", "Max"]),
+        ("RPUSH", vec!["list_numbers", "1"]),
+        ("RPUSH", vec!["list_numbers", "2"]),
+        ("RPUSH", vec!["list_numbers", "3"]),
     ];
 
     let expected_resp = execute_commands(&mut conn, &commands).await;
@@ -206,7 +212,4 @@ async fn test_redis_protocol(#[case] major_version: u8, #[case] minor_version: u
         split_resp_commands(&actual_resp).into_iter().collect();
 
     assert_eq!(actual_commands, expected_commands);
-
-    let value: String = conn.get("foo").unwrap();
-    assert_eq!(value, "bar");
 }
