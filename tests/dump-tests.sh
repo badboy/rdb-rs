@@ -25,7 +25,7 @@ fi
 failure=0
 for f in $FORMATS; do
   echo "Running $f tests..."
-  for dump in $(find "$DUMP_DIRECTORY" -type f -name "*.rdb"); do
+  for dump in $(find "$DUMP_DIRECTORY" -maxdepth 1 -type f -name "*.rdb"); do
     echo "  with $dump"
     $BIN --format $f $dump >/dev/null
 

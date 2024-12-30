@@ -22,7 +22,7 @@ else
 fi
 
 failure=0
-for dump in $(find "$DUMP_DIRECTORY" -type f -name "*.rdb"); do
+for dump in $(find "$DUMP_DIRECTORY" -maxdepth 1 -type f -name "*.rdb"); do
   file=$(basename $dump)
   echo "  with $file"
 
