@@ -2,7 +2,7 @@
 use super::write_str;
 use crate::formatter::Formatter;
 use indexmap::IndexMap;
-use serialize::json;
+use rustc_serialize::json;
 use std::io;
 use std::io::Write;
 use std::path::PathBuf;

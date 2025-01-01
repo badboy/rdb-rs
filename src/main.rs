@@ -1,7 +1,7 @@
 use clap::Parser;
 use regex::Regex;
 use std::fs::File;
-use std::io::{BufReader, Write};
+use std::io::BufReader;
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -85,22 +85,16 @@ pub fn main() {
     let reader = BufReader::new(file);
 
     // Parse with the specified formatter
-    let output = match cli.format.as_deref().unwrap_or("json") {
-        "json" => rdb::parse(reader, rdb::formatter::JSON::new(cli.output), filter),
-        "plain" => rdb::parse(reader, rdb::formatter::Plain::new(cli.output), filter),
-        "nil" => rdb::parse(reader, rdb::formatter::Nil::new(cli.output), filter),
-        "protocol" => rdb::parse(reader, rdb::formatter::Protocol::new(cli.output), filter),
+    let formatter: rdb::FormatterType = match cli.format.as_deref().unwrap_or("json") {
+        "json" => rdb::FormatterType::Json(rdb::formatter::JSON::new(cli.output)),
+        "plain" => rdb::FormatterType::Plain(rdb::formatter::Plain::new(cli.output)),
+        "nil" => rdb::FormatterType::Nil(rdb::formatter::Nil::new(cli.output)),
+        "protocol" => rdb::FormatterType::Protocol(rdb::formatter::Protocol::new(cli.output)),
         f => {
             println!("Unknown format: {}\n", f);
             std::process::exit(1);
         }
     };
 
-    // Handle parsing errors
-    if let Err(e) = output {
-        println!("");
-        let mut stderr = std::io::stderr();
-        let out = format!("Parsing failed: {}\n", e);
-        stderr.write(out.as_bytes()).unwrap();
-    }
+    rdb::parse(reader, formatter, filter).expect("Failed to parse RDB file");
 }

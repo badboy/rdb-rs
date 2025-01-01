@@ -1,6 +1,7 @@
 use super::common::utils::{read_blob, read_exact, read_length};
 use super::common::{
-    read_list_pack_entry_as_string, read_ziplist_entry_string, read_ziplist_metadata, read_list_pack_length
+    read_list_pack_entry_as_string, read_list_pack_length, read_ziplist_entry_string,
+    read_ziplist_metadata,
 };
 use crate::types::{RdbError, RdbResult, RdbValue};
 use byteorder::{LittleEndian, ReadBytesExt};

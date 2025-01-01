@@ -98,3 +98,21 @@ pub trait Formatter {
         }
     }
 }
+
+pub enum FormatterType {
+    Json(JSON),
+    Plain(Plain),
+    Nil(Nil),
+    Protocol(Protocol),
+}
+
+impl Formatter for FormatterType {
+    fn format(&mut self, value: &RdbValue) -> std::io::Result<()> {
+        match self {
+            Self::Json(f) => f.format(value),
+            Self::Plain(f) => f.format(value),
+            Self::Nil(f) => f.format(value),
+            Self::Protocol(f) => f.format(value),
+        }
+    }
+}

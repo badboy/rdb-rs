@@ -116,7 +116,6 @@ pub fn read_list_pack_entry_as_string<R: Read>(reader: &mut R) -> RdbResult<Vec<
     }
 }
 
-
 pub fn read_list_pack_length(buf: &[u8], cursor: &mut usize) -> usize {
     let _total_bytes = u32::from_le_bytes(buf[*cursor..*cursor + 4].try_into().unwrap()) as usize;
     *cursor += 4;

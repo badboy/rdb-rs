@@ -77,28 +77,94 @@ extern crate lzf;
 extern crate regex;
 extern crate rustc_serialize as serialize;
 
+//use pyo3::prelude::*;
 use std::io::Read;
 
 #[doc(hidden)]
-pub use types::{/* error and result types */ RdbError, RdbOk, RdbResult, Type};
-
-pub use parser::RdbParser;
-
-use filter::Filter;
-use formatter::Formatter;
+pub use types::{RdbError, RdbOk, RdbResult, Type};
 
 pub mod constants;
+pub mod decoder;
 pub mod filter;
 pub mod formatter;
-pub mod parser;
 pub mod types;
 
-pub fn parse<R: Read, F: Formatter, T: Filter>(input: R, mut formatter: F, filter: T) -> RdbOk {
-    let parser = RdbParser::new(input, filter)?;
-    formatter.start_rdb();
-    for value in parser {
-        formatter.format(&value?)?;
+pub use decoder::RdbDecoder;
+pub use filter::{Filter, Simple};
+pub use formatter::{Formatter, FormatterType};
+
+// Main entry point for parsing RDB files
+pub struct RdbParser<R: Read, L: Filter, F: Formatter> {
+    decoder: RdbDecoder<R, L>,
+    formatter: Option<F>,
+}
+
+impl<R: Read, L: Filter, F: Formatter> RdbParser<R, L, F> {
+    pub fn builder() -> RdbParserBuilder<R, L, F> {
+        RdbParserBuilder {
+            reader: None,
+            filter: None,
+            formatter: None,
+        }
     }
-    formatter.end_rdb();
-    Ok(())
+}
+
+#[derive(Default)]
+pub struct RdbParserBuilder<R: Read, L: Filter, F: Formatter> {
+    reader: Option<R>,
+    filter: Option<L>,
+    formatter: Option<F>,
+}
+
+impl<R: Read, L: Filter + Default, F: Formatter> RdbParserBuilder<R, L, F> {
+    pub fn build(self) -> RdbParser<R, L, F> {
+        let reader = self.reader.unwrap();
+        let filter = self.filter.unwrap_or_default();
+        let formatter = self.formatter;
+        RdbParser {
+            decoder: RdbDecoder::new(reader, filter).unwrap(),
+            formatter: formatter,
+        }
+    }
+
+    pub fn with_reader(mut self, reader: R) -> Self {
+        self.reader = Some(reader);
+        self
+    }
+
+    pub fn with_filter(mut self, filter: L) -> Self {
+        self.filter = Some(filter);
+        self
+    }
+
+    pub fn with_formatter(mut self, formatter: F) -> Self {
+        self.formatter = Some(formatter);
+        self
+    }
+}
+
+impl<R: Read, L: Filter, F: Formatter> RdbParser<R, L, F> {
+    pub fn parse(self) -> RdbResult<()> {
+        if let Some(mut formatter) = self.formatter {
+            formatter.start_rdb();
+            for value in self.decoder {
+                formatter.format(&value?)?;
+            }
+            formatter.end_rdb();
+        }
+        Ok(())
+    }
+}
+
+pub fn parse<R: Read, L: Filter + Default, F: Formatter>(
+    reader: R,
+    formatter: F,
+    filter: L,
+) -> RdbResult<()> {
+    let parser = RdbParser::builder()
+        .with_reader(reader)
+        .with_filter(filter)
+        .with_formatter(formatter)
+        .build();
+    parser.parse()
 }

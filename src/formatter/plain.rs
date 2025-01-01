@@ -2,7 +2,7 @@
 use super::write_str;
 use crate::formatter::Formatter;
 use indexmap::IndexMap;
-use serialize::hex::ToHex;
+use rustc_serialize::hex::ToHex;
 use std::io;
 use std::io::Write;
 use std::path::PathBuf;

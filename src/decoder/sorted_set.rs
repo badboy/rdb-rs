@@ -1,8 +1,6 @@
 use super::common::utils::{read_blob, read_exact, read_length};
-use super::common::{
-    read_ziplist_entry_string, read_ziplist_metadata, read_list_pack_length
-};
-use crate::parser::common::read_list_pack_entry_as_string;
+use super::common::{read_list_pack_length, read_ziplist_entry_string, read_ziplist_metadata};
+use crate::decoder::common::read_list_pack_entry_as_string;
 use crate::types::{RdbError, RdbResult, RdbValue};
 use byteorder::ReadBytesExt;
 use std::io::{Cursor, Read};
@@ -19,7 +17,7 @@ pub fn read_sorted_set<R: Read>(
 
     while set_items > 0 {
         let val = read_blob(input)?;
-        
+
         let score = if is_zset2 {
             // ZSET2 format uses binary encoding of float64
             input.read_f64::<byteorder::LittleEndian>()?
@@ -106,12 +104,15 @@ pub fn read_sorted_set_listpack<R: Read>(
     for _ in 0..num_entries {
         let member = read_list_pack_entry_as_string(&mut reader)?;
         let score_str = read_list_pack_entry_as_string(&mut reader)?;
-        
+
         let score = unsafe { str::from_utf8_unchecked(&score_str) }
             .parse::<f64>()
             .map_err(|_| RdbError::ParsingError {
                 context: "read_sorted_set_listpack",
-                message: format!("Failed to parse score: {:?}", String::from_utf8_lossy(&score_str)),
+                message: format!(
+                    "Failed to parse score: {:?}",
+                    String::from_utf8_lossy(&score_str)
+                ),
             })?;
 
         values.push((score, member));
@@ -123,5 +124,3 @@ pub fn read_sorted_set_listpack<R: Read>(
         expiry,
     })
 }
-
-
