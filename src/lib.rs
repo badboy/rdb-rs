@@ -38,7 +38,7 @@
 //! * `JSONFormatter`: JSON-encoded output
 //! * `NilFormatter`: Surpresses all output
 //! * `ProtocolFormatter`: Formats the data in [RESP](http://redis.io/topics/protocol),
-//! the Redis Serialization Protocol
+//!   the Redis Serialization Protocol
 //!
 //! These formatters adhere to the `RdbParseFormatter` trait
 //! and supply a method for each possible datatype or opcode.
@@ -107,9 +107,9 @@ impl<R: Read, L: Filter, F: Formatter> RdbParser<R, L, F> {
         }
     }
 
-    pub fn into_iter(self) -> RdbDecoder<R, L> {
-        self.decoder
-    }
+    //pub fn into_iter(self) -> RdbDecoder<R, L> {
+    //    self.decoder
+    //}
 }
 
 #[derive(Default)]
@@ -126,7 +126,7 @@ impl<R: Read, L: Filter + Default, F: Formatter> RdbParserBuilder<R, L, F> {
         let formatter = self.formatter;
         RdbParser {
             decoder: RdbDecoder::new(reader, filter).unwrap(),
-            formatter: formatter,
+            formatter,
         }
     }
 

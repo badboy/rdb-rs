@@ -71,16 +71,15 @@ pub(crate) fn read_type<R: Read>(
 
 pub(crate) fn skip<R: Read>(input: &mut R, skip_bytes: usize) -> RdbResult<()> {
     let mut buf = vec![0; skip_bytes];
-    input.read_exact(&mut buf).map_err(|e| RdbError::Io(e))?;
+    input.read_exact(&mut buf).map_err(RdbError::Io)?;
     Ok(())
 }
 
 pub(crate) fn skip_blob<R: Read>(input: &mut R) -> RdbResult<()> {
     let (len, is_encoded) = read_length_with_encoding(input)?;
-    let skip_bytes;
-
-    if is_encoded {
-        skip_bytes = match len {
+    
+    let skip_bytes = if is_encoded {
+        match len {
             encoding::INT8 => 1,
             encoding::INT16 => 2,
             encoding::INT32 => 4,
@@ -97,8 +96,8 @@ pub(crate) fn skip_blob<R: Read>(input: &mut R) -> RdbResult<()> {
             }
         }
     } else {
-        skip_bytes = len;
-    }
+        len
+    };
 
     skip(input, skip_bytes as usize)
 }

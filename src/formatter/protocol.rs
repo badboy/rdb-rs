@@ -44,7 +44,7 @@ impl Protocol {
     }
 
     fn pre_expire(&mut self, expiry: &Option<u64>) {
-        self.last_expiry = expiry.clone();
+        self.last_expiry = *expiry;
     }
 
     fn post_expire(&mut self, key: &[u8]) {
@@ -104,11 +104,11 @@ impl Protocol {
 }
 
 impl Formatter for Protocol {
-    fn string(&mut self, key: &Vec<u8>, value: &Vec<u8>, _expiry: &Option<u64>) {
+    fn string(&mut self, key: &[u8], value: &[u8], _expiry: &Option<u64>) {
         self.set(key, value, _expiry);
     }
 
-    fn hash(&mut self, key: &Vec<u8>, values: &IndexMap<Vec<u8>, Vec<u8>>, expiry: &Option<u64>) {
+    fn hash(&mut self, key: &[u8], values: &IndexMap<Vec<u8>, Vec<u8>>, expiry: &Option<u64>) {
         self.start_hash(expiry);
         for (field, value) in values {
             self.hash_element(key, field, value);
@@ -116,7 +116,7 @@ impl Formatter for Protocol {
         self.end_hash(key);
     }
 
-    fn set(&mut self, key: &Vec<u8>, values: &Vec<Vec<u8>>, expiry: &Option<u64>) {
+    fn set(&mut self, key: &[u8], values: &[Vec<u8>], expiry: &Option<u64>) {
         self.start_set(expiry);
         for value in values {
             self.set_element(key, value);
@@ -124,7 +124,7 @@ impl Formatter for Protocol {
         self.end_set(key);
     }
 
-    fn list(&mut self, key: &Vec<u8>, values: &Vec<Vec<u8>>, expiry: &Option<u64>) {
+    fn list(&mut self, key: &[u8], values: &[Vec<u8>], expiry: &Option<u64>) {
         self.start_list(expiry);
         for value in values {
             self.list_element(key, value);
@@ -132,7 +132,7 @@ impl Formatter for Protocol {
         self.end_list(key);
     }
 
-    fn sorted_set(&mut self, key: &Vec<u8>, values: &Vec<(f64, Vec<u8>)>, expiry: &Option<u64>) {
+    fn sorted_set(&mut self, key: &[u8], values: &[(f64, Vec<u8>)], expiry: &Option<u64>) {
         self.start_sorted_set(expiry);
         for (score, member) in values {
             self.sorted_set_element(key, *score, member);

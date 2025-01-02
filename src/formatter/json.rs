@@ -71,7 +71,7 @@ fn encode_to_ascii(value: &[u8]) -> String {
             let s: String = value
                 .iter()
                 .map(|&b| {
-                    if b >= 32 && b < 127 {
+                    if (32..127).contains(&b) {
                         // ASCII printable characters
                         (b as char).to_string()
                     } else {
@@ -107,14 +107,14 @@ impl Formatter for JSON {
         self.is_first_key_in_db = true;
     }
 
-    fn string(&mut self, key: &Vec<u8>, value: &Vec<u8>, _expiry: &Option<u64>) {
+    fn string(&mut self, key: &[u8], value: &[u8], _expiry: &Option<u64>) {
         self.start_key(0);
         self.write_key(key);
         write_str(&mut self.out, ":");
         self.write_value(value);
     }
 
-    fn hash(&mut self, key: &Vec<u8>, values: &IndexMap<Vec<u8>, Vec<u8>>, _expiry: &Option<u64>) {
+    fn hash(&mut self, key: &[u8], values: &IndexMap<Vec<u8>, Vec<u8>>, _expiry: &Option<u64>) {
         self.start_key(values.len() as u32);
         self.write_key(key);
         write_str(&mut self.out, ":{");
@@ -128,7 +128,7 @@ impl Formatter for JSON {
         write_str(&mut self.out, "}");
     }
 
-    fn set(&mut self, key: &Vec<u8>, values: &Vec<Vec<u8>>, _expiry: &Option<u64>) {
+    fn set(&mut self, key: &[u8], values: &[Vec<u8>], _expiry: &Option<u64>) {
         self.start_key(values.len() as u32);
         self.write_key(key);
         write_str(&mut self.out, ":[");
@@ -140,7 +140,7 @@ impl Formatter for JSON {
         write_str(&mut self.out, "]");
     }
 
-    fn list(&mut self, key: &Vec<u8>, values: &Vec<Vec<u8>>, _expiry: &Option<u64>) {
+    fn list(&mut self, key: &[u8], values: &[Vec<u8>], _expiry: &Option<u64>) {
         self.start_key(values.len() as u32);
         self.write_key(key);
         write_str(&mut self.out, ":[");
@@ -152,7 +152,7 @@ impl Formatter for JSON {
         write_str(&mut self.out, "]");
     }
 
-    fn sorted_set(&mut self, key: &Vec<u8>, values: &Vec<(f64, Vec<u8>)>, _expiry: &Option<u64>) {
+    fn sorted_set(&mut self, key: &[u8], values: &[(f64, Vec<u8>)], _expiry: &Option<u64>) {
         self.start_key(values.len() as u32);
         self.write_key(key);
         write_str(&mut self.out, ":{");

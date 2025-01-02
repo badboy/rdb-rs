@@ -71,7 +71,7 @@ pub fn verify_version<R: Read>(input: &mut R) -> RdbOk {
     let version = version_str.parse::<u32>().unwrap();
 
     // Check if version is in supported range
-    let is_ok = version >= version::SUPPORTED_MINIMUM && version <= version::SUPPORTED_MAXIMUM;
+    let is_ok = (version::SUPPORTED_MINIMUM..=version::SUPPORTED_MAXIMUM).contains(&version);
 
     if !is_ok {
         return Err(RdbError::MissingValue("unsupported version"));
@@ -168,26 +168,21 @@ mod tests {
     #[test]
     fn test_verify_version() {
         // Valid version "0003" should succeed
-        assert_eq!(
-            (),
-            verify_version(&mut Cursor::new(vec![0x30, 0x30, 0x30, 0x33])).unwrap()
-        );
+        let success = verify_version(&mut Cursor::new(vec![0x30, 0x30, 0x30, 0x33]));
+        assert!(success.is_ok(), "Expected success for valid version");
+
 
         // Invalid version "000:" should fail
-        let result = verify_version(&mut Cursor::new(vec![0x30, 0x30, 0x30, 0x3a]));
-        assert!(result.is_err());
+        let failure = verify_version(&mut Cursor::new(vec![0x30, 0x30, 0x30, 0x3a]));
+        assert!(failure.is_err());
     }
 
     #[test]
     fn test_verify_magic() {
-        assert_eq!(
-            (),
-            verify_magic(&mut Cursor::new(vec![0x52, 0x45, 0x44, 0x49, 0x53])).unwrap()
-        );
+        let success = verify_magic(&mut Cursor::new(vec![0x52, 0x45, 0x44, 0x49, 0x53]));
+        assert!(success.is_ok(), "Expected success for valid magic bytes");
 
-        match verify_magic(&mut Cursor::new(vec![0x51, 0x0, 0x0, 0x0, 0x0])) {
-            Ok(_) => assert!(false),
-            Err(_) => assert!(true),
-        }
+        let failure = verify_magic(&mut Cursor::new(vec![0x51, 0x0, 0x0, 0x0, 0x0]));
+        assert!(failure.is_err(), "Expected error for invalid magic bytes");
     }
 }

@@ -1,6 +1,6 @@
+use assert_cmd::Command;
 use pretty_assertions::assert_eq;
 use rdb::{self, filter, formatter};
-use redis;
 use redis::Client;
 use rstest::rstest;
 use std::fs;
@@ -8,7 +8,6 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
 use std::path::PathBuf;
-use assert_cmd::Command;
 use tempfile::tempdir;
 use tempfile::TempDir;
 use testcontainers::core::Mount;
@@ -219,21 +218,19 @@ fn test_cli_commands_succeed(
     #[files("tests/dumps/*.rdb")] path: PathBuf,
     #[values("json", "plain", "protocol")] format: &str,
     #[values("", "1")] databases: &str,
-    #[values("", "hash", "set", "list", "sortedset", "string")] types: &str
+    #[values("", "hash", "set", "list", "sortedset", "string")] types: &str,
 ) {
     let mut cmd = Command::cargo_bin("rdb").unwrap();
-    
+
     cmd.args(["--format", format]);
-    
+
     if !databases.is_empty() {
         cmd.args(["--databases", databases]);
     }
-    
+
     if !types.is_empty() {
         cmd.args(["--type", types]);
     }
 
-    cmd.arg(&path)
-        .assert()
-        .success();
+    cmd.arg(&path).assert().success();
 }

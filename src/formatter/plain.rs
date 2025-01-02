@@ -77,7 +77,7 @@ impl Plain {
 }
 
 impl Formatter for Plain {
-    fn string(&mut self, key: &Vec<u8>, value: &Vec<u8>, _expiry: &Option<u64>) {
+    fn string(&mut self, key: &[u8], value: &[u8], _expiry: &Option<u64>) {
         self.write_line_start();
         self.out.write_all(key);
         write_str(&mut self.out, " -> ");
@@ -86,32 +86,32 @@ impl Formatter for Plain {
         self.out.flush();
     }
 
-    fn hash(&mut self, key: &Vec<u8>, values: &IndexMap<Vec<u8>, Vec<u8>>, _expiry: &Option<u64>) {
+    fn hash(&mut self, key: &[u8], values: &IndexMap<Vec<u8>, Vec<u8>>, _expiry: &Option<u64>) {
         for (field, value) in values {
             self.hash_element(key, field, value);
         }
     }
 
-    fn set(&mut self, key: &Vec<u8>, values: &Vec<Vec<u8>>, _expiry: &Option<u64>) {
+    fn set(&mut self, key: &[u8], values: &[Vec<u8>], _expiry: &Option<u64>) {
         for value in values {
             self.set_element(key, value);
         }
     }
 
-    fn list(&mut self, key: &Vec<u8>, values: &Vec<Vec<u8>>, _expiry: &Option<u64>) {
+    fn list(&mut self, key: &[u8], values: &[Vec<u8>], _expiry: &Option<u64>) {
         for (i, value) in values.iter().enumerate() {
             self.list_element(i, key, value);
         }
     }
 
-    fn sorted_set(&mut self, key: &Vec<u8>, values: &Vec<(f64, Vec<u8>)>, _expiry: &Option<u64>) {
+    fn sorted_set(&mut self, key: &[u8], values: &[(f64, Vec<u8>)], _expiry: &Option<u64>) {
         for (i, (score, member)) in values.iter().enumerate() {
             self.sorted_set_element(i, key, *score, member);
         }
     }
 
     fn checksum(&mut self, checksum: &[u8]) {
-        if checksum.len() != 0 {
+        if !checksum.is_empty() {
             write_str(&mut self.out, "checksum ");
             write_str(&mut self.out, &checksum.to_hex());
             write_str(&mut self.out, "\n");

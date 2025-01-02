@@ -120,17 +120,16 @@ pub fn read_hash_zipmap<R: Read>(
 }
 
 fn read_zipmap_entry<T: Read>(next_byte: u8, zipmap: &mut T) -> RdbResult<Vec<u8>> {
-    let elem_len;
-    match next_byte {
-        253 => elem_len = zipmap.read_u32::<LittleEndian>().unwrap(),
+    let elem_len = match next_byte {
+        253 => zipmap.read_u32::<LittleEndian>().unwrap(),
         254 | 255 => {
             return Err(RdbError::ParsingError {
                 context: "read_zipmap_entry",
                 message: format!("Unknown encoding value: {}", next_byte),
             });
         }
-        _ => elem_len = next_byte as u32,
-    }
+        _ => next_byte as u32,
+    };
 
     read_exact(zipmap, elem_len as usize)
 }

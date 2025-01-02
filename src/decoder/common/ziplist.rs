@@ -42,26 +42,23 @@ fn read_ziplist_entry<R: Read>(input: &mut R) -> RdbResult<ZiplistEntry> {
         };
     }
 
-    let length: u64;
     let number_value: i64;
 
-    // 2. Read flag or number value
+    // 2. Read flag or number valu
     let flag = input.read_u8()?;
 
-    match (flag & 0xC0) >> 6 {
-        0 => length = (flag & 0x3F) as u64,
+    let length = match (flag & 0xC0) >> 6 {
+        0 => (flag & 0x3F) as u64,
         1 => {
             let next_byte = input.read_u8()?;
-            length = (((flag & 0x3F) as u64) << 8) | next_byte as u64;
+            (((flag & 0x3F) as u64) << 8) | next_byte as u64
         }
-        2 => {
-            length = input.read_u32::<BigEndian>()? as u64;
-        }
+        2 => input.read_u32::<BigEndian>()? as u64,
         _ => {
             match (flag & 0xF0) >> 4 {
                 0xC => number_value = input.read_i16::<LittleEndian>()? as i64,
                 0xD => number_value = input.read_i32::<LittleEndian>()? as i64,
-                0xE => number_value = input.read_i64::<LittleEndian>()? as i64,
+                0xE => number_value = input.read_i64::<LittleEndian>()?,
                 0xF => match flag & 0xF {
                     0 => {
                         let mut bytes = [0; 3];
@@ -96,7 +93,7 @@ fn read_ziplist_entry<R: Read>(input: &mut R) -> RdbResult<ZiplistEntry> {
 
             return Ok(ZiplistEntry::Number(number_value));
         }
-    }
+    };
 
     // 3. Read value
     let rawval = read_exact(input, length as usize)?;

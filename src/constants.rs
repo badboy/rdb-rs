@@ -7,7 +7,7 @@ pub mod constant {
     pub const RDB_6BITLEN: u8 = 0;
     pub const RDB_14BITLEN: u8 = 1;
     pub const RDB_ENCVAL: u8 = 3;
-    pub const RDB_MAGIC: &'static str = "REDIS";
+    pub const RDB_MAGIC: &str = "REDIS";
 }
 
 pub mod op_code {

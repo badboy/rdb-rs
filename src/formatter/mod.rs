@@ -15,7 +15,7 @@ pub mod plain;
 pub mod protocol;
 
 pub fn write_str<W: Write>(out: &mut W, data: &str) {
-    out.write(data.as_bytes()).unwrap();
+    out.write_all(data.as_bytes()).unwrap();
 }
 
 #[allow(unused_variables)]
@@ -30,15 +30,15 @@ pub trait Formatter {
     fn resizedb(&mut self, db_size: u32, expires_size: u32) {}
     fn aux_field(&mut self, key: &[u8], value: &[u8]) {}
 
-    fn string(&mut self, key: &Vec<u8>, value: &Vec<u8>, expiry: &Option<u64>) {}
+    fn string(&mut self, key: &[u8], value: &[u8], expiry: &Option<u64>) {}
 
-    fn hash(&mut self, key: &Vec<u8>, values: &IndexMap<Vec<u8>, Vec<u8>>, expiry: &Option<u64>) {}
+    fn hash(&mut self, key: &[u8], values: &IndexMap<Vec<u8>, Vec<u8>>, expiry: &Option<u64>) {}
 
-    fn set(&mut self, key: &Vec<u8>, values: &Vec<Vec<u8>>, expiry: &Option<u64>) {}
+    fn set(&mut self, key: &[u8], values: &[Vec<u8>], expiry: &Option<u64>) {}
 
-    fn list(&mut self, key: &Vec<u8>, values: &Vec<Vec<u8>>, expiry: &Option<u64>) {}
+    fn list(&mut self, key: &[u8], values: &[Vec<u8>], expiry: &Option<u64>) {}
 
-    fn sorted_set(&mut self, key: &Vec<u8>, values: &Vec<(f64, Vec<u8>)>, expiry: &Option<u64>) {}
+    fn sorted_set(&mut self, key: &[u8], values: &[(f64, Vec<u8>)], expiry: &Option<u64>) {}
 
     fn format(&mut self, value: &RdbValue) -> std::io::Result<()> {
         match value {
