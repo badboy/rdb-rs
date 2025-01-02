@@ -125,6 +125,12 @@ pub(crate) fn skip_object<R: Read>(input: &mut R, enc_type: u8) -> RdbResult<()>
     Ok(())
 }
 
+pub(crate) fn skip_key_and_object<R: Read>(input: &mut R, enc_type: u8) -> RdbResult<()> {
+    skip_blob(input)?;
+    skip_object(input, enc_type)?;
+    Ok(())
+}
+
 pub(crate) fn process_next_operation<R: Read, F: Filter>(
     input: &mut R,
     filter: &F,
@@ -184,7 +190,7 @@ pub(crate) fn process_next_operation<R: Read, F: Filter>(
         }
         value_type => {
             if !filter.matches_db(state.current_database) {
-                skip_object(input, value_type)?;
+                skip_key_and_object(input, value_type)?;
                 return Ok(RdbValue::SelectDb(state.current_database));
             }
 

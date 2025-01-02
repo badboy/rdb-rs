@@ -8,6 +8,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
 use std::path::PathBuf;
+use assert_cmd::Command;
 use tempfile::tempdir;
 use tempfile::TempDir;
 use testcontainers::core::Mount;
@@ -173,7 +174,7 @@ fn split_resp_commands(resp: &str) -> Vec<String> {
 #[case::redis_7_2(7, 2)]
 #[case::redis_7_4(7, 4)]
 #[tokio::test]
-async fn test_redis_protocol(#[case] major_version: u8, #[case] minor_version: u8) {
+async fn test_redis_protocol_reproducibility(#[case] major_version: u8, #[case] minor_version: u8) {
     let (client, tmp_dir, _container) = redis_client(major_version, minor_version).await;
     let mut conn = client.get_connection().unwrap();
 
@@ -211,4 +212,28 @@ async fn test_redis_protocol(#[case] major_version: u8, #[case] minor_version: u
         split_resp_commands(&actual_resp).into_iter().collect();
 
     assert_eq!(actual_commands, expected_commands);
+}
+
+#[rstest]
+fn test_cli_commands_succeed(
+    #[files("tests/dumps/*.rdb")] path: PathBuf,
+    #[values("json", "plain", "protocol")] format: &str,
+    #[values("", "1")] databases: &str,
+    #[values("", "hash", "set", "list", "sortedset", "string")] types: &str
+) {
+    let mut cmd = Command::cargo_bin("rdb").unwrap();
+    
+    cmd.args(["--format", format]);
+    
+    if !databases.is_empty() {
+        cmd.args(["--databases", databases]);
+    }
+    
+    if !types.is_empty() {
+        cmd.args(["--type", types]);
+    }
+
+    cmd.arg(&path)
+        .assert()
+        .success();
 }
