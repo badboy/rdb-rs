@@ -1,31 +1,19 @@
 # rdb-rs - RDB parsing, formatting, analyzing. All in one library
 
-[![crates.io](http://meritbadge.herokuapp.com/rdb)](https://crates.io/crates/rdb)
-[![Build Status](https://travis-ci.org/badboy/rdb-rs.svg?branch=master)](https://travis-ci.org/badboy/rdb-rs)
-[![Clippy Linting Result](http://clippy.bashy.io/github/badboy/rdb-rs/master/badge.svg)](http://clippy.bashy.io/github/badboy/rdb-rs/master/log)
+This is a fork and refactor of the archived https://github.com/badboy/rdb-rs. 
+My goal is to modernize the library, implement support for newer RDB versions and encoding types and also offer python bindings. 
 
 Inspired and based on [redis-rdb-tools][].
 
 ## Documentation
 
-Online at [rdb.fnordig.de/doc/rdb/][doc].
-
+TBD
 
 ## Build
 
 ```
 cargo build --release
 ```
-
-Minimum required Rust version: 1.6.0
-
-## Install
-
-```
-make install
-```
-
-You can change the path by setting `PREFIX`. Defaults to `/usr`.
 
 ## Basic operation
 

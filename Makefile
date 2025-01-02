@@ -49,9 +49,5 @@ doc-upload: doc
 
 upload: www-upload doc-upload
 
-install: build-release
-	@mkdir -p $(INSTALL_BIN)
-	$(RDB_INSTALL) $(BINARY_PATH) $(INSTALL_BIN)
-
 clean:
 	rm -r target

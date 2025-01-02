@@ -27,7 +27,7 @@
 //! # use std::path::Path;
 //! let file = File::open(&Path::new("dump.rdb")).unwrap();
 //! let reader = BufReader::new(file);
-//! rdb::parse_with_formatter(reader, rdb::formatter::JSON::new(None), rdb::filter::Simple::new());
+//! rdb::parse(reader, rdb::formatter::JSON::new(None), rdb::filter::Simple::new());
 //! ```
 //!
 //! # Formatter
@@ -159,7 +159,7 @@ impl<R: Read, L: Filter, F: Formatter> RdbParser<R, L, F> {
     }
 }
 
-pub fn parse_with_formatter<R: Read, L: Filter + Default, F: Formatter>(
+pub fn parse<R: Read, L: Filter + Default, F: Formatter>(
     reader: R,
     formatter: F,
     filter: L,

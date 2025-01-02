@@ -96,5 +96,5 @@ pub fn main() {
         }
     };
 
-    rdb::parse_with_formatter(reader, formatter, filter).expect("Failed to parse RDB file");
+    rdb::parse(reader, formatter, filter).expect("Failed to parse RDB file");
 }

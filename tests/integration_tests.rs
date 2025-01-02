@@ -29,17 +29,17 @@ fn run_dump_test(input: PathBuf, format: &str) -> String {
         "json" => {
             let formatter = formatter::JSON::new(Some(temp_output.clone()));
             let filter = filter::Simple::new();
-            rdb::parse_with_formatter(reader, formatter, filter).expect("Failed to parse RDB file");
+            rdb::parse(reader, formatter, filter).expect("Failed to parse RDB file");
         }
         "protocol" => {
             let formatter = formatter::Protocol::new(Some(temp_output.clone()));
             let filter = filter::Simple::new();
-            rdb::parse_with_formatter(reader, formatter, filter).expect("Failed to parse RDB file");
+            rdb::parse(reader, formatter, filter).expect("Failed to parse RDB file");
         }
         "plain" => {
             let formatter = formatter::Plain::new(Some(temp_output.clone()));
             let filter = filter::Simple::new();
-            rdb::parse_with_formatter(reader, formatter, filter).expect("Failed to parse RDB file");
+            rdb::parse(reader, formatter, filter).expect("Failed to parse RDB file");
         }
         _ => {
             panic!("Invalid format: {}", format);
@@ -139,7 +139,7 @@ fn parse_rdb_to_resp(rdb_path: &Path) -> String {
     let rdb_reader = BufReader::new(rdb_file);
     let tmp_file = tempfile::NamedTempFile::new().unwrap();
 
-    rdb::parse_with_formatter(
+    rdb::parse(
         rdb_reader,
         rdb::formatter::Protocol::new(Some(tmp_file.path().to_path_buf())),
         rdb::filter::Simple::new(),
