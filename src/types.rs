@@ -4,6 +4,11 @@ use indexmap::IndexMap;
 
 use crate::constants::encoding_type;
 
+#[cfg(feature = "python")]
+use pyo3::prelude::*;
+#[cfg(feature = "python")]
+use pyo3::types::PyDict;
+
 #[derive(Error, Debug)]
 pub enum RdbError {
     #[error("IO error: {0}")]
@@ -113,5 +118,105 @@ pub enum RdbValue {
         values: Vec<(f64, Vec<u8>)>, // (score, member)
         expiry: Option<u64>,
     },
-    Skipped,
+}
+
+#[cfg(feature = "python")]
+impl<'py> IntoPyObject<'py> for RdbValue {
+    type Target = PyDict;
+    type Output = Bound<'py, PyDict>;
+    type Error = PyErr;
+
+    fn into_pyobject(self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
+        match self {
+            RdbValue::Hash {
+                key,
+                values,
+                expiry,
+            } => {
+                let dict = PyDict::new(py);
+                let values_dict = PyDict::new(py);
+                for (k, v) in values {
+                    values_dict.set_item(k, v)?;
+                }
+                dict.set_item("type", "hash")?;
+                dict.set_item("key", key)?;
+                dict.set_item("values", values_dict)?;
+                dict.set_item("expiry", expiry)?;
+                Ok(dict)
+            }
+            RdbValue::List {
+                key,
+                values,
+                expiry,
+            } => {
+                let dict = PyDict::new(py);
+                dict.set_item("type", "list")?;
+                dict.set_item("key", key)?;
+                dict.set_item("values", values)?;
+                dict.set_item("expiry", expiry)?;
+                Ok(dict)
+            }
+            RdbValue::Set {
+                key,
+                members,
+                expiry,
+            } => {
+                let dict = PyDict::new(py);
+                dict.set_item("type", "set")?;
+                dict.set_item("key", key)?;
+                dict.set_item("members", members)?;
+                dict.set_item("expiry", expiry)?;
+                Ok(dict)
+            }
+            RdbValue::SortedSet {
+                key,
+                values,
+                expiry,
+            } => {
+                let dict = PyDict::new(py);
+                dict.set_item("type", "sorted_set")?;
+                dict.set_item("key", key)?;
+                dict.set_item("values", values)?;
+                dict.set_item("expiry", expiry)?;
+                Ok(dict)
+            }
+            RdbValue::String { key, value, expiry } => {
+                let dict = PyDict::new(py);
+                dict.set_item("type", "string")?;
+                dict.set_item("key", key)?;
+                dict.set_item("value", value)?;
+                dict.set_item("expiry", expiry)?;
+                Ok(dict)
+            }
+            RdbValue::SelectDb(db) => {
+                let dict = PyDict::new(py);
+                dict.set_item("type", "select_db")?;
+                dict.set_item("db", db)?;
+                Ok(dict)
+            }
+            RdbValue::ResizeDb {
+                db_size,
+                expires_size,
+            } => {
+                let dict = PyDict::new(py);
+                dict.set_item("type", "resize_db")?;
+                dict.set_item("db_size", db_size)?;
+                dict.set_item("expires_size", expires_size)?;
+                Ok(dict)
+            }
+            RdbValue::AuxField { key, value } => {
+                let dict = PyDict::new(py);
+                dict.set_item("type", "aux_field")?;
+                dict.set_item("key", key)?;
+                dict.set_item("value", value)?;
+                Ok(dict)
+            }
+            RdbValue::Checksum(checksum) => {
+                let dict = PyDict::new(py);
+                dict.set_item("type", "checksum")?;
+                dict.set_item("checksum", checksum)?;
+                Ok(dict)
+            }
+        }
+    }
 }

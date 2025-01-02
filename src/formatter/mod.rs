@@ -94,7 +94,6 @@ pub trait Formatter {
                 self.checksum(checksum);
                 Ok(())
             }
-            _ => Ok(()),
         }
     }
 }

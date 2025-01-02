@@ -27,7 +27,7 @@
 //! # use std::path::Path;
 //! let file = File::open(&Path::new("dump.rdb")).unwrap();
 //! let reader = BufReader::new(file);
-//! rdb::parse(reader, rdb::formatter::JSON::new(None), rdb::filter::Simple::new());
+//! rdb::parse_with_formatter(reader, rdb::formatter::JSON::new(None), rdb::filter::Simple::new());
 //! ```
 //!
 //! # Formatter
@@ -72,12 +72,11 @@
 //! value
 //! ```
 
-extern crate byteorder;
-extern crate lzf;
-extern crate regex;
-extern crate rustc_serialize as serialize;
+#[cfg(feature = "python")]
+use pyo3::exceptions::PyValueError;
+#[cfg(feature = "python")]
+use pyo3::prelude::*;
 
-//use pyo3::prelude::*;
 use std::io::Read;
 
 #[doc(hidden)]
@@ -106,6 +105,10 @@ impl<R: Read, L: Filter, F: Formatter> RdbParser<R, L, F> {
             filter: None,
             formatter: None,
         }
+    }
+
+    pub fn into_iter(self) -> RdbDecoder<R, L> {
+        self.decoder
     }
 }
 
@@ -156,7 +159,7 @@ impl<R: Read, L: Filter, F: Formatter> RdbParser<R, L, F> {
     }
 }
 
-pub fn parse<R: Read, L: Filter + Default, F: Formatter>(
+pub fn parse_with_formatter<R: Read, L: Filter + Default, F: Formatter>(
     reader: R,
     formatter: F,
     filter: L,
@@ -167,4 +170,61 @@ pub fn parse<R: Read, L: Filter + Default, F: Formatter>(
         .with_formatter(formatter)
         .build();
     parser.parse()
+}
+
+#[cfg(feature = "python")]
+#[pyclass(name = "RdbDecoder")]
+pub struct PyRdbDecoder {
+    decoder: RdbDecoder<std::fs::File, Simple>,
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl PyRdbDecoder {
+    #[new]
+    pub fn new(path: &str) -> PyResult<Self> {
+        let file = std::fs::File::open(path)
+            .map_err(|e| PyValueError::new_err(format!("Failed to open file: {}", e)))?;
+
+        let mut filter = Simple::new();
+
+        for t in [
+            Type::Hash,
+            Type::String,
+            Type::List,
+            Type::Set,
+            Type::SortedSet,
+        ] {
+            filter.add_type(t);
+        }
+
+        let decoder = RdbDecoder::new(file, filter)
+            .map_err(|e| PyValueError::new_err(format!("Failed to create decoder: {}", e)))?;
+
+        Ok(PyRdbDecoder { decoder })
+    }
+
+    fn __iter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
+        slf
+    }
+
+    fn __next__(mut slf: PyRefMut<'_, Self>) -> PyResult<Option<PyObject>> {
+        match slf.decoder.next() {
+            Some(Ok(value)) => Python::with_gil(|py| {
+                value
+                    .into_pyobject(py)
+                    .map(|obj| Some(obj.into()))
+                    .map_err(|e| PyValueError::new_err(format!("Conversion error: {}", e)))
+            }),
+            Some(Err(e)) => Err(PyValueError::new_err(format!("Parsing error: {}", e))),
+            None => Ok(None),
+        }
+    }
+}
+
+#[cfg(feature = "python")]
+#[pymodule(name = "rdb")]
+fn rdb_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<PyRdbDecoder>()?;
+    Ok(())
 }

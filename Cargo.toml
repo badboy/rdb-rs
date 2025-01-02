@@ -25,6 +25,10 @@ name = "rdb"
 path = "src/main.rs"
 doc  = false
 
+[lib]
+name = "rdb"
+crate-type = ["cdylib", "rlib"]
+
 [dependencies]
 lzf = "0.3"
 getopts = "0.2"
@@ -32,6 +36,7 @@ rustc-serialize = "0.3"
 regex = "0.1"
 byteorder = "0.5"
 thiserror = "1.0"
+pyo3 = { version = "0.23.3", features = ["extension-module"], optional = true }
 clap = { version = "4.4", features = ["derive"] }
 indexmap = "2.7.0"
 log = "0.4.22"
@@ -45,3 +50,7 @@ rstest = "0.23.0"
 testcontainers = "0.23.1"
 testcontainers-modules = { version = "0.11.4", features = ["redis"] }
 tempfile = "3.14.0"
+
+[features]
+default = []
+python = ["pyo3"]
