@@ -3,6 +3,8 @@
 This is a fork and refactor of the archived https://github.com/badboy/rdb-rs. 
 My goal is to modernize the library, implement support for newer RDB versions and encoding types and also offer python bindings. 
 
+See [changelog](CHANGELOG.md).
+
 Inspired and based on [redis-rdb-tools][].
 
 ## Documentation
