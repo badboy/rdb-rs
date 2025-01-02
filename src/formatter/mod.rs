@@ -114,4 +114,22 @@ impl Formatter for FormatterType {
             Self::Protocol(f) => f.format(value),
         }
     }
+
+    fn start_rdb(&mut self) {
+        match self {
+            Self::Json(f) => f.start_rdb(),
+            Self::Plain(f) => f.start_rdb(),
+            Self::Nil(f) => f.start_rdb(),
+            Self::Protocol(f) => f.start_rdb(),
+        }
+    }
+
+    fn end_rdb(&mut self) {
+        match self {
+            Self::Json(f) => f.end_rdb(),
+            Self::Plain(f) => f.end_rdb(),
+            Self::Nil(f) => f.end_rdb(),
+            Self::Protocol(f) => f.end_rdb(),
+        }
+    }
 }
