@@ -77,7 +77,7 @@ pub(crate) fn skip<R: Read>(input: &mut R, skip_bytes: usize) -> RdbResult<()> {
 
 pub(crate) fn skip_blob<R: Read>(input: &mut R) -> RdbResult<()> {
     let (len, is_encoded) = read_length_with_encoding(input)?;
-    
+
     let skip_bytes = if is_encoded {
         match len {
             encoding::INT8 => 1,

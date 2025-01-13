@@ -171,7 +171,6 @@ mod tests {
         let success = verify_version(&mut Cursor::new(vec![0x30, 0x30, 0x30, 0x33]));
         assert!(success.is_ok(), "Expected success for valid version");
 
-
         // Invalid version "000:" should fail
         let failure = verify_version(&mut Cursor::new(vec![0x30, 0x30, 0x30, 0x3a]));
         assert!(failure.is_err());
