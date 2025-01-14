@@ -8,9 +8,6 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
 use std::path::PathBuf;
-use tempfile::tempdir;
-use tempfile::TempDir;
-use testcontainers::core::Mount;
 use testcontainers::ContainerAsync;
 use testcontainers_modules::{
     redis::Redis, testcontainers::runners::AsyncRunner, testcontainers::ImageExt,
@@ -84,17 +81,9 @@ fn test_dump_matches_expected(#[files("tests/dumps/*.rdb")] path: PathBuf, #[cas
     );
 }
 
-async fn redis_client(
-    major_version: u8,
-    minor_version: u8,
-) -> (Client, TempDir, ContainerAsync<Redis>) {
-    let tmp_dir = tempdir().unwrap();
+async fn redis_client(major_version: u8, minor_version: u8) -> (Client, ContainerAsync<Redis>) {
     let container = Redis::default()
         .with_tag(format!("{}.{}-alpine", major_version, minor_version))
-        .with_mount(Mount::bind_mount(
-            tmp_dir.path().display().to_string(),
-            "/data",
-        ))
         .start()
         .await
         .expect("Failed to start Redis container");
@@ -104,7 +93,7 @@ async fn redis_client(
     let url = format!("redis://{}:{}", host_ip, host_port);
     let client = Client::open(url).expect("Failed to create Redis client");
 
-    (client, tmp_dir, container)
+    (client, container)
 }
 
 fn to_resp_format(command: &str, args: &[&str]) -> String {
@@ -174,7 +163,7 @@ fn split_resp_commands(resp: &str) -> Vec<String> {
 #[case::redis_7_4(7, 4)]
 #[tokio::test]
 async fn test_redis_protocol_reproducibility(#[case] major_version: u8, #[case] minor_version: u8) {
-    let (client, tmp_dir, _container) = redis_client(major_version, minor_version).await;
+    let (client, container) = redis_client(major_version, minor_version).await;
     let mut conn = client.get_connection().unwrap();
 
     let commands = vec![
@@ -200,11 +189,25 @@ async fn test_redis_protocol_reproducibility(#[case] major_version: u8, #[case] 
 
     let expected_resp = execute_commands(&mut conn, &commands).await;
     redis::cmd("SAVE").exec(&mut conn).unwrap();
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-    let rdb_file = Path::new(&tmp_dir.path()).join("dump.rdb");
-    let actual_resp = parse_rdb_to_resp(&rdb_file);
+    let container_id = container.id();
+    let temp_file = tempfile::NamedTempFile::new().unwrap();
 
-    // Compare commands as unordered sets
+    let status = std::process::Command::new("docker")
+        .args([
+            "cp",
+            "-q",
+            &format!("{}:/data/dump.rdb", container_id),
+            temp_file.path().to_str().unwrap(),
+        ])
+        .status()
+        .expect("Failed to execute docker cp");
+
+    assert!(status.success(), "docker cp command failed");
+
+    let actual_resp = parse_rdb_to_resp(temp_file.path());
+
     let expected_commands: std::collections::HashSet<_> =
         split_resp_commands(&expected_resp).into_iter().collect();
     let actual_commands: std::collections::HashSet<_> =

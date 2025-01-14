@@ -31,8 +31,10 @@ jobs:
       - name: cargo test
         run: cargo test --verbose
 
-      - name: rustfmt
+      - name: Check formatting
+        if: matrix.toolchain == 'stable'
         run: cargo fmt --all -- --check
 
-      - name: clippy
+      - name: Clippy
+        if: matrix.toolchain == 'stable'
         run: cargo clippy --all --all-features --tests -- -D warnings
