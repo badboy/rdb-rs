@@ -1,5 +1,5 @@
 [project]
-name = "rdb"
+name = "rdb-py"
 version = "0.3.0"
 description = "Add your description here"
 readme = "README.md"
