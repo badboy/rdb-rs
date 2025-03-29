@@ -39,7 +39,6 @@ thiserror = "1.0"
 pyo3 = { version = "0.23.3", features = ["extension-module"], optional = true }
 clap = { version = "4.4", features = ["derive"] }
 indexmap = "2.7.0"
-log = "0.4.22"
 
 [dev-dependencies]
 async-std = { version = "1.13.0", features = ["attributes"] }

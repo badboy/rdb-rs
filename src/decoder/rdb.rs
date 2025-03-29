@@ -61,7 +61,6 @@ pub(crate) fn read_type<R: Read>(
         encoding_type::ZSET_LIST_PACK => sorted_set::read_sorted_set_listpack(input, key, expiry)?,
         encoding_type::SET_LIST_PACK => set::read_set_list_pack(input, key, expiry)?,
         unknown_type => {
-            log::debug!("Skipping unknown encoding type: {}", unknown_type);
             skip_object(input, unknown_type)?;
             return Err(RdbError::MissingValue("skip"));
         }
