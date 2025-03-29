@@ -30,25 +30,23 @@ name = "rdb"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-lzf = "0.3"
-getopts = "0.2"
+lzf = "1.0"
 rustc-serialize = "0.3"
-regex = "0.1"
-byteorder = "0.5"
-thiserror = "1.0"
-pyo3 = { version = "0.23.3", features = ["extension-module"], optional = true }
-clap = { version = "4.4", features = ["derive"] }
-indexmap = "2.7.0"
+regex = "1.11"
+byteorder = "1.5"
+thiserror = "2.0"
+pyo3 = { version = "0.24.0", features = ["extension-module"], optional = true }
+clap = { version = "4.5", features = ["derive"] }
+indexmap = "2.8.0"
 
 [dev-dependencies]
-async-std = { version = "1.13.0", features = ["attributes"] }
-tokio = { version = "1.0", features = ["full"] }
+tokio = { version = "1.44", features = ["full"] }
 pretty_assertions = "1.4.1"
-redis = "0.27.6"
-rstest = "0.23.0"
+redis = "0.29.2"
+rstest = "0.25.0"
 testcontainers = "0.23.1"
 testcontainers-modules = { version = "0.11.4", features = ["redis"] }
-tempfile = "3.14.0"
+tempfile = "3.19.1"
 assert_cmd = "2.0.16"
 
 [features]
