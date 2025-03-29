@@ -1,7 +1,7 @@
 [project]
 name = "rdb-py"
 version = "0.3.0"
-description = "Add your description here"
+description = "Python wrapper around the fast and efficient RDB parsing utility"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
