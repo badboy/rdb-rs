@@ -1,6 +1,5 @@
 use crate::types::Type;
 use regex::Regex;
-use std::str;
 
 pub trait Filter {
     fn matches_db(&self, _db: u32) -> bool {
@@ -61,8 +60,8 @@ impl Filter for Simple {
         match self.keys.clone() {
             None => true,
             Some(re) => {
-                let key = unsafe { str::from_utf8_unchecked(key) };
-                re.is_match(key)
+                let key = String::from_utf8_lossy(key);
+                re.is_match(&key)
             }
         }
     }

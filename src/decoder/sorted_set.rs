@@ -30,9 +30,7 @@ pub fn read_sorted_set<R: Read>(
                 255 => f64::NEG_INFINITY,
                 _ => {
                     let tmp = read_exact(input, score_length as usize)?;
-                    unsafe { str::from_utf8_unchecked(&tmp) }
-                        .parse::<f64>()
-                        .unwrap()
+                    String::from_utf8_lossy(&tmp).parse::<f64>().unwrap()
                 }
             }
         };
@@ -105,7 +103,7 @@ pub fn read_sorted_set_listpack<R: Read>(
         let member = read_list_pack_entry_as_string(&mut reader)?;
         let score_str = read_list_pack_entry_as_string(&mut reader)?;
 
-        let score = unsafe { str::from_utf8_unchecked(&score_str) }
+        let score = String::from_utf8_lossy(&score_str)
             .parse::<f64>()
             .map_err(|_| RdbError::ParsingError {
                 context: "read_sorted_set_listpack",
