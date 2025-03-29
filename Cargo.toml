@@ -7,9 +7,8 @@ keywords = ["redis", "database", "rdb", "parser"]
 description = "Fast and efficient RDB parsing utility"
 readme = "README.md"
 license = "MIT"
-homepage = "http://rdb.fnordig.de/"
-documentation = "http://rdb.fnordig.de/doc/rdb/"
-repository = "https://github.com/badboy/rdb-rs"
+documentation = "https://docs.rs/rdb/"
+repository = "https://github.com/bimtauer/rdb-rs"
 
 include = [
   "Cargo.toml",

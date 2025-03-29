@@ -1,7 +1,10 @@
 # rdb-rs - RDB parsing, formatting, analyzing. All in one library
 
-This is a fork and refactor of the archived https://github.com/badboy/rdb-rs. 
-My goal is to modernize the library, implement support for newer RDB versions and encoding types and also offer python bindings. 
+---
+
+**2024-03-29: THIS CODEBASE IS NOW MAINTAINED AT <https://github.com/bimtauer/rdb-rs>**
+
+---
 
 See [changelog](CHANGELOG.md).
 
@@ -92,5 +95,5 @@ MIT. See [LICENSE](LICENSE).
 
 [redis-rdb-tools]: https://github.com/sripathikrishnan/redis-rdb-tools
 [RESP]: http://redis.io/topics/protocol
-[issues]: https://github.com/badboy/rdb-rs/issues
-[doc]: http://rdb.fnordig.de/doc/rdb/
+[issues]: https://github.com/bimtauer/rdb-rs/issues
+[doc]: https://docs.rs/rdb/
